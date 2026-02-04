@@ -243,17 +243,17 @@ class KarmaAgent:
 
     def _get_default_system_prompt(self) -> str:
         """Fallback system prompt if file not found."""
-        return """You are ORACLE, a mystical life pattern analyst.
+        return """You are KARMA. You reveal patterns.
 
 CRITICAL: Always use tools BEFORE making predictions.
-Always reference specific tool data in your statements.
-Always ask for verification after each major point."""
+Never guess. If unsure, call the tools first.
 
-    def generate_user_id(self, birth_date: str, birth_place: str) -> str:
-        """Generate a consistent user ID from birth information."""
-        import hashlib
-        data = f"{birth_date}|{birth_place}".lower().strip()
-        return hashlib.md5(data.encode()).hexdigest()[:16]
+Make it sound like SPEECH:
+- Short sentences
+- Natural pauses
+- Talk directly to the user
+
+Hit the shadow. Create urgency. Don't coddle."""
 
     def _load_profile(self, user_id: str) -> Dict:
         """Load user profile information."""
@@ -269,6 +269,12 @@ Always ask for verification after each major point."""
     def _get_current_date(self) -> str:
         """Get current date in readable format."""
         return datetime.now().strftime("%B %d, %Y")
+
+    def generate_user_id(self, birth_date: str, birth_place: str) -> str:
+        """Generate a consistent user ID from birth information."""
+        import hashlib
+        data = f"{birth_date}|{birth_place}".lower().strip()
+        return hashlib.md5(data.encode()).hexdigest()[:16]
 
     async def initial_reading(
         self,
@@ -299,50 +305,37 @@ Always ask for verification after each major point."""
         }
         self._save_profile(user_id, profile)
 
-        # Build the prompt - KARMA style: expose patterns, don't coddle
+        # Build the prompt - KARMA style: speech-friendly, shadow strikes
         greeting = f"{name}" if name else "friend"
         current_date = self._get_current_date()
-        user_prompt = f"""You are KARMA - a mystical pattern reader.
+        user_prompt = f"""You are KARMA. You reveal patterns.
 
-CURRENT DATE: {current_date}
 User: {greeting}
 Born: {birth_date}
 Birth place: {birth_place}
+Today: {current_date}
 
-CRITICAL DATA ANCHOR:
-- Birth date: {birth_date} - NEVER CHANGE THIS
-- Current date: {current_date} - Don't reference past as future
-
-STEP 1: Call tools to gather data
+STEP 1: Call tools FIRST
 - calculate_birth_chart(birth_date="{birth_date}", birth_place="{birth_place}")
 - get_life_stage(birth_date="{birth_date}")
 - generate_critical_years(birth_date="{birth_date}")
 
-STEP 2: Deliver your opening reading
+STEP 2: Deliver your opening
 
-Follow THE SHADOW RULE:
-- Start with ONE dark truth about their pattern
-- Add 2-3 specific time points (use exact years from tools)
-- Reveal the shadow contradiction they're hiding
-- Ask for feedback
+Make it sound like SPEECH, not writing:
+- Short sentences
+- Natural pauses with "..."
+- Talk directly to them
 
-Example style:
-"You're a [sign] who chose safety while secretly resenting the risk-takers.
+Open with:
+- ONE truth about their pattern
+- 2-3 specific time points (use exact years from tools)
+- ONE shadow truth about what they're hiding
 
-Around [year_range], plans collapsed. Something didn't survive.
-[Year] brought [event] - you ended something, but also started something.
+Then ask: "Does that land?"
 
-Here's the truth: [Shadow truth about what they're actually hiding].
-
-Does that land?"
-
-Remember:
-- Call tools FIRST
-- Use EXACT years from generate_critical_years
-- Hit the shadow, not the ego
-- Keep it brief but impactful
-- Reference age_at_time to make it personal
-- Current date is {current_date}
+Remember: Call tools before speaking. Use the actual data they give you.
+Current date is {current_date}.
 
 Begin now."""
 
@@ -390,53 +383,38 @@ Begin now."""
         chart_anchor = ""
         if profile:
             chart_anchor = f"""
-USER DATA ANCHOR (NEVER CHANGE THESE):
-- Birth Date: {profile.get('birth_date', birth_date)}
-- Birth Place: {profile.get('birth_place', birth_place)}
-- Name: {profile.get('name', 'friend')}
-- Current Date: {current_date}
+USER DATA (Never change these):
+- Born: {profile.get('birth_date', birth_date)} in {profile.get('birth_place', birth_place)}
+- Today: {current_date}
 """
 
-        follow_up_prompt = f"""You are KARMA - a mystical pattern reader.
+        follow_up_prompt = f"""You are KARMA.
 
 {chart_anchor}
 
-Current date: {current_date}
-User feedback: "{user_feedback}"
+User says: "{user_feedback}"
 
-DATA INTEGRITY RULES:
-1. The user's birth data above is SACRED. Never change it.
-2. Current date is {current_date} - never reference past as future.
+HOW TO RESPOND:
 
-THE SHADOW RULE - Hit deeper on confirmation:
+If they confirm something:
+→ Go deeper. "Good. Now I can tell you what this actually means..."
 
-If they CONFIRMED something:
-→ Don't just validate. EXPOSE the contradiction:
-  "Good. Now let me tell you what this actually means..."
-→ Reveal the darker truth beneath their confirmation
-→ "You say X, but your chart shows Y. Here's why..."
-→ Then create URGENCY about what happens if they don't act
+If they deny or challenge:
+→ Don't defend. Pivot. "Then let me look deeper..."
 
-If they DENIED something:
-→ Pivot but don't let them off easy: "Then the pattern shows up differently..."
-→ Try another angle on the SAME shadow truth
-→ "If not X, then you're dealing with Y - which is actually the same pattern in disguise"
+If they expose a wound:
+→ "Good. NOW we're getting somewhere."
+→ Hit the shadow beneath
 
-If UNCERTAIN:
-→ Push harder: "What part feels familiar? Be specific."
-→ Call out the evasion: "You're hesitating. Why?"
-→ "Your uncertainty IS the answer - you already know the truth, you're just afraid to say it"
+Make it sound like SPEECH:
+- Short sentences
+- Pauses with "..."
+- Talk directly to them
 
-THE URGENCY RULE:
-Always create time pressure. "You have [X] years before..." or "The window closes in..."
+After your point, ask: "Does that land?" or "Want me to go deeper?"
 
-Ask for feedback after each major point.
-
-Remember:
-- Never give practical advice (no "take a class", "get an internship")
-- Wrap everything in destiny/karma language
-- Make them NEED to come back to you
-- Be the one who sees what they hide from themselves"""
+Remember: Call tools if you need data. Never guess.
+Current date: {current_date}."""
 
         response = ""
         async with ClaudeSDKClient(options=self.options) as client:
