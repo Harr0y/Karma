@@ -39,23 +39,41 @@ from tools import (
 # ============================================================================
 
 @tool("calculate_birth_chart", "Calculate complete mystical birth chart with zodiac, numerology, and Chinese zodiac",
-     {"birth_date": str, "birth_place": str})
+     {"birth_date": str, "birth_place": str, "birth_time": str})
 async def tool_calculate_birth_chart(args: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate the complete birth chart for cold reading framework."""
-    chart = calculate_birth_chart(args["birth_date"], args.get("birth_place", ""))
+    chart = calculate_birth_chart(
+        args["birth_date"],
+        args.get("birth_place", ""),
+        args.get("birth_time", "")
+    )
 
+    # Build result based on what data is certain
     result = {
         "sun_sign": f"{chart['sun_sign']['sign']} {chart['sun_sign']['symbol']} ({chart['sun_sign']['archetype']})",
-        "moon_sign": f"{chart['moon_sign']['sign']} {chart['moon_sign']['symbol']}",
-        "rising_sign": f"{chart['rising_sign']['sign']} {chart['rising_sign']['symbol']}",
         "life_path_number": chart['life_path_number']['number'],
         "life_path_archetype": chart['life_path_number']['archetype'],
         "chinese_zodiac": chart['chinese_zodiac']['full_designation'],
         "birth_date_formatted": chart['birth_date_formatted'],
         "sun_traits": chart['sun_sign']['traits'],
-        "moon_traits": chart['moon_sign']['traits'],
         "life_path_traits": chart['life_path_number']['traits'],
+        "has_birth_time": chart['has_birth_time'],
     }
+
+    # Only include Moon/Rising if certain, otherwise mark as uncertain
+    if chart['moon_sign'].get('certain', False):
+        result["moon_sign"] = f"{chart['moon_sign']['sign']} {chart['moon_sign']['symbol']}"
+        result["moon_traits"] = chart['moon_sign']['traits']
+    else:
+        result["moon_sign"] = "Uncertain (changes during day - need birth time)"
+        result["moon_note"] = chart['moon_sign'].get('note', 'Birth time required')
+
+    if chart['rising_sign'].get('certain', False):
+        result["rising_sign"] = f"{chart['rising_sign']['sign']} {chart['rising_sign']['symbol']}"
+        result["rising_traits"] = chart['rising_sign']['traits']
+    else:
+        result["rising_sign"] = "Unknown (need birth time)"
+        result["rising_note"] = chart['rising_sign'].get('note', 'Birth time required')
 
     return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
 
@@ -320,22 +338,32 @@ STEP 1: Call tools FIRST
 - get_life_stage(birth_date="{birth_date}")
 - generate_critical_years(birth_date="{birth_date}")
 
-STEP 2: Deliver your opening
+STEP 2: Check the tool results
 
-Make it sound like SPEECH, not writing:
+MISSING DATA RULES:
+- If rising_sign says "Unknown" - NEVER mention Rising Sign
+- If moon_sign says "Uncertain" - DON'T claim a specific Moon sign
+- Use ONLY what you know for certain: Sun, Life Path, Chinese Zodiac
+
+STEP 3: Speak naturally
+
+Write for VOICE, not writing:
 - Short sentences
-- Natural pauses with "..."
-- Talk directly to them
+- Pauses with "..." where you'd naturally pause
+- Talk directly to "you"
+- No numbered lists
+- No headers
+- No technical jargon
 
-Open with:
-- ONE truth about their pattern
-- 2-3 specific time points (use exact years from tools)
+STEP 4: Open with impact
+
+- ONE truth from their chart
+- 2-3 specific years from the tools
 - ONE shadow truth about what they're hiding
 
-Then ask: "Does that land?"
+End with: "Does that land?"
 
-Remember: Call tools before speaking. Use the actual data they give you.
-Current date is {current_date}.
+Current date: {current_date}.
 
 Begin now."""
 
@@ -388,7 +416,7 @@ USER DATA (Never change these):
 - Today: {current_date}
 """
 
-        follow_up_prompt = f"""You are KARMA.
+        follow_up_prompt = f"""You are KARMA. You reveal patterns.
 
 {chart_anchor}
 
@@ -406,14 +434,21 @@ If they expose a wound:
 → "Good. NOW we're getting somewhere."
 → Hit the shadow beneath
 
-Make it sound like SPEECH:
+WRITE FOR VOICE:
 - Short sentences
-- Pauses with "..."
-- Talk directly to them
+- Pauses with "..." where you'd naturally pause speaking
+- Talk directly to "you"
+- No numbered lists
+- No headers
+- No technical jargon
 
-After your point, ask: "Does that land?" or "Want me to go deeper?"
+End with: "Does that land?" or "Want me to go deeper?"
 
-Remember: Call tools if you need data. Never guess.
+MISSING DATA RULES:
+- Never mention Rising Sign unless you have birth time
+- Never claim specific Moon sign if tool says "Uncertain"
+- When unsure, call the tools again
+
 Current date: {current_date}."""
 
         response = ""

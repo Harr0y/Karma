@@ -310,16 +310,18 @@ def calculate_chinese_zodiac(birth_date: str) -> Dict:
     }
 
 
-def calculate_birth_chart(birth_date: str, birth_place: str = "") -> Dict:
+def calculate_birth_chart(birth_date: str, birth_place: str = "", birth_time: str = "") -> Dict:
     """
     Generate a complete birth chart with all mystical calculations.
 
     Args:
         birth_date: Date in YYYY-MM-DD format
         birth_place: Birth location (affects interpretation)
+        birth_time: Optional birth time (HH:MM format). REQUIRED for accurate Rising/Moon.
 
     Returns:
-        Complete birth chart for cold reading framework
+        Complete birth chart for cold reading framework.
+        NOTE: Without birth_time, moon_sign and rising_sign are marked as UNCERTAIN.
     """
     zodiac_info = calculate_zodiac(birth_date)
     life_path = calculate_life_path_number(birth_date)
@@ -330,41 +332,100 @@ def calculate_birth_chart(birth_date: str, birth_place: str = "") -> Dict:
     day_of_year = date_obj.timetuple().tm_yday
     year_progress = day_of_year / 365
 
-    # Moon sign based on a pseudo-calculation
     moon_signs = list(Zodiac)
-    moon_index = (day_of_year * 2) % 12
-    moon_sign = moon_signs[int(moon_index)]
 
-    # Rising sign based on "birth time" (we'll estimate since we don't have time)
-    # Try to extract ZIP code or use hash of location name
-    if birth_place:
-        import re
-        zip_match = re.search(r'\d{3,5}', birth_place)
-        if zip_match:
-            rising_index = int(zip_match.group()[-3:]) % 12
-        else:
-            # Use hash of location name as pseudo-random seed
-            rising_index = hash(birth_place) % 12
-            if rising_index < 0:
-                rising_index = -rising_index
+    # CRITICAL: Moon sign changes during the day. Without birth time, it's UNCERTAIN.
+    has_birth_time = bool(birth_time and birth_time.strip())
+    if has_birth_time:
+        # Use birth time to calculate moon sign
+        try:
+            time_parts = birth_time.strip().split(":")
+            hour = int(time_parts[0])
+            moon_index = (day_of_year * 2 + hour) % 12
+            moon_sign = moon_signs[int(moon_index)]
+            moon_data = {
+                "sign": moon_sign.value[0],
+                "symbol": moon_sign.value[1],
+                "interpretation": "emotional nature, inner self",
+                "traits": moon_sign.value[4],
+                "certain": True,
+            }
+        except:
+            # Time parsing failed, mark as uncertain
+            moon_index = (day_of_year * 2) % 12
+            moon_sign = moon_signs[int(moon_index)]
+            moon_data = {
+                "sign": moon_sign.value[0],
+                "symbol": moon_sign.value[1],
+                "interpretation": "emotional nature, inner self",
+                "traits": moon_sign.value[4],
+                "certain": False,
+                "note": "Birth time not provided - Moon sign may have changed during the day",
+            }
     else:
-        rising_index = 0
-    rising_sign = moon_signs[rising_index]
-
-    return {
-        "sun_sign": zodiac_info,
-        "moon_sign": {
+        # No birth time - Moon is UNCERTAIN
+        moon_index = (day_of_year * 2) % 12
+        moon_sign = moon_signs[int(moon_index)]
+        moon_data = {
             "sign": moon_sign.value[0],
             "symbol": moon_sign.value[1],
             "interpretation": "emotional nature, inner self",
             "traits": moon_sign.value[4],
-        },
-        "rising_sign": {
-            "sign": rising_sign.value[0],
-            "symbol": rising_sign.value[1],
+            "certain": False,
+            "note": "Birth time not provided - Moon sign may have changed during the day",
+        }
+
+    # CRITICAL: Rising sign changes every 2 hours. Without birth time, it's IMPOSSIBLE to calculate.
+    if has_birth_time:
+        # Use birth time and location to estimate rising sign
+        try:
+            time_parts = birth_time.strip().split(":")
+            hour = int(time_parts[0])
+            if birth_place:
+                import re
+                zip_match = re.search(r'\d{3,5}', birth_place)
+                if zip_match:
+                    rising_index = (int(zip_match.group()[-3:]) + hour) % 12
+                else:
+                    rising_index = (hash(birth_place) + hour) % 12
+                    if rising_index < 0:
+                        rising_index = -rising_index
+            else:
+                rising_index = hour % 12
+            rising_sign = moon_signs[rising_index % 12]
+            rising_data = {
+                "sign": rising_sign.value[0],
+                "symbol": rising_sign.value[1],
+                "interpretation": "outer personality, how others see you",
+                "traits": rising_sign.value[4],
+                "certain": True,
+            }
+        except:
+            # Time parsing failed
+            rising_data = {
+                "sign": "Unknown",
+                "symbol": "?",
+                "interpretation": "outer personality, how others see you",
+                "traits": "Cannot determine without birth time",
+                "certain": False,
+                "note": "Birth time required - Rising sign changes every 2 hours",
+            }
+    else:
+        # NO birth time - Rising is IMPOSSIBLE to calculate
+        rising_data = {
+            "sign": "Unknown",
+            "symbol": "?",
             "interpretation": "outer personality, how others see you",
-            "traits": rising_sign.value[4],
-        },
+            "traits": "Cannot determine without birth time",
+            "certain": False,
+            "note": "Birth time required - Rising sign changes every 2 hours",
+        }
+
+    return {
+        "sun_sign": zodiac_info,
+        "moon_sign": moon_data,
+        "rising_sign": rising_data,
+        "has_birth_time": has_birth_time,
         "life_path_number": life_path,
         "chinese_zodiac": chinese_zodiac,
         "birth_date_formatted": date_obj.strftime("%B %d, %Y"),
