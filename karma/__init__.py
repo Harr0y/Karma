@@ -1,11 +1,11 @@
 """
-Karma - Mystical Life Pattern Analysis
+KARMA - Pattern Reading
 
-A cold reading application wrapped in mystical symbolism.
+A mystical pattern reader that reveals what people hide from themselves.
 Built with claude-agent-sdk.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Karma Project"
 
 # Lazy imports to avoid loading SDK at import time

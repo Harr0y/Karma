@@ -336,7 +336,19 @@ def calculate_birth_chart(birth_date: str, birth_place: str = "") -> Dict:
     moon_sign = moon_signs[int(moon_index)]
 
     # Rising sign based on "birth time" (we'll estimate since we don't have time)
-    rising_index = (int(birth_place[-3:] if birth_place and len(birth_place) >= 3 else "0") % 12) if birth_place else 0
+    # Try to extract ZIP code or use hash of location name
+    if birth_place:
+        import re
+        zip_match = re.search(r'\d{3,5}', birth_place)
+        if zip_match:
+            rising_index = int(zip_match.group()[-3:]) % 12
+        else:
+            # Use hash of location name as pseudo-random seed
+            rising_index = hash(birth_place) % 12
+            if rising_index < 0:
+                rising_index = -rising_index
+    else:
+        rising_index = 0
     rising_sign = moon_signs[rising_index]
 
     return {

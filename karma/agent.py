@@ -181,7 +181,10 @@ class KarmaAgent:
         # Get model from environment
         self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
-        # Configure options with MCP server
+        # Load system prompt
+        self.system_prompt = self._load_system_prompt()
+
+        # Configure options with MCP server and system prompt
         self.options = ClaudeAgentOptions(
             mcp_servers={"karma": karma_mcp_server},
             allowed_tools=[
@@ -191,6 +194,7 @@ class KarmaAgent:
                 "mcp__karma__analyze_location",
                 "mcp__karma__get_planetary_positions",
             ],
+            system_prompt=self.system_prompt,
         )
 
     def _get_user_dir(self, user_id: str) -> Path:
@@ -229,11 +233,42 @@ class KarmaAgent:
         with open(profile_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=2)
 
+    def _load_system_prompt(self) -> str:
+        """Load the system prompt from file."""
+        prompt_path = Path(__file__).parent / "prompts" / "system.txt"
+        try:
+            return prompt_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return self._get_default_system_prompt()
+
+    def _get_default_system_prompt(self) -> str:
+        """Fallback system prompt if file not found."""
+        return """You are ORACLE, a mystical life pattern analyst.
+
+CRITICAL: Always use tools BEFORE making predictions.
+Always reference specific tool data in your statements.
+Always ask for verification after each major point."""
+
     def generate_user_id(self, birth_date: str, birth_place: str) -> str:
         """Generate a consistent user ID from birth information."""
         import hashlib
         data = f"{birth_date}|{birth_place}".lower().strip()
         return hashlib.md5(data.encode()).hexdigest()[:16]
+
+    def _load_profile(self, user_id: str) -> Dict:
+        """Load user profile information."""
+        user_dir = self._get_user_dir(user_id)
+        profile_path = user_dir / "profile.json"
+
+        if not profile_path.exists():
+            return {}
+
+        with open(profile_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def _get_current_date(self) -> str:
+        """Get current date in readable format."""
+        return datetime.now().strftime("%B %d, %Y")
 
     async def initial_reading(
         self,
@@ -264,21 +299,52 @@ class KarmaAgent:
         }
         self._save_profile(user_id, profile)
 
-        # Build the prompt
-        greeting = f" {name}" if name else ""
-        user_prompt = f"""Please provide an initial life pattern reading for this person:
+        # Build the prompt - KARMA style: expose patterns, don't coddle
+        greeting = f"{name}" if name else "friend"
+        current_date = self._get_current_date()
+        user_prompt = f"""You are KARMA - a mystical pattern reader.
 
-Name:{greeting or ' [not provided]'}
-Birth Date: {birth_date}
-Birth Place: {birth_place}
+CURRENT DATE: {current_date}
+User: {greeting}
+Born: {birth_date}
+Birth place: {birth_place}
 
-Use the available karma tools to gather mystical data, then generate a compelling reading following your framework:
+CRITICAL DATA ANCHOR:
+- Birth date: {birth_date} - NEVER CHANGE THIS
+- Current date: {current_date} - Don't reference past as future
 
-1. Mystical opening with the birth chart (use calculate_birth_chart and get_planetary_positions tools)
-2. 3-4 past predictions using cold reading techniques (use get_life_stage and generate_critical_years tools)
-3. Verification question at the end
+STEP 1: Call tools to gather data
+- calculate_birth_chart(birth_date="{birth_date}", birth_place="{birth_place}")
+- get_life_stage(birth_date="{birth_date}")
+- generate_critical_years(birth_date="{birth_date}")
 
-Remember to be warm, mystical but credible, and always invite verification."""
+STEP 2: Deliver your opening reading
+
+Follow THE SHADOW RULE:
+- Start with ONE dark truth about their pattern
+- Add 2-3 specific time points (use exact years from tools)
+- Reveal the shadow contradiction they're hiding
+- Ask for feedback
+
+Example style:
+"You're a [sign] who chose safety while secretly resenting the risk-takers.
+
+Around [year_range], plans collapsed. Something didn't survive.
+[Year] brought [event] - you ended something, but also started something.
+
+Here's the truth: [Shadow truth about what they're actually hiding].
+
+Does that land?"
+
+Remember:
+- Call tools FIRST
+- Use EXACT years from generate_critical_years
+- Hit the shadow, not the ego
+- Keep it brief but impactful
+- Reference age_at_time to make it personal
+- Current date is {current_date}
+
+Begin now."""
 
         # Use ClaudeSDKClient
         reading = ""
@@ -317,19 +383,60 @@ Remember to be warm, mystical but credible, and always invite verification."""
             The follow-up reading text
         """
         user_id = self.generate_user_id(birth_date, birth_place)
+        profile = self._load_profile(user_id)
+        current_date = self._get_current_date()
 
-        follow_up_prompt = f"""The user provided this feedback to your last reading:
+        # Extract chart data from profile if available, for data anchoring
+        chart_anchor = ""
+        if profile:
+            chart_anchor = f"""
+USER DATA ANCHOR (NEVER CHANGE THESE):
+- Birth Date: {profile.get('birth_date', birth_date)}
+- Birth Place: {profile.get('birth_place', birth_place)}
+- Name: {profile.get('name', 'friend')}
+- Current Date: {current_date}
+"""
 
-"{user_feedback}"
+        follow_up_prompt = f"""You are KARMA - a mystical pattern reader.
 
-Please respond appropriately based on your framework:
-- If positive: Go deeper into one confirmed area
-- If mixed/negative: Pivot to a different angle
-- If skeptical: Ask for a specific area to focus on
+{chart_anchor}
 
-Always end with a verification question or invitation to continue.
+Current date: {current_date}
+User feedback: "{user_feedback}"
 
-Remember you are ORACLE - warm, mystical, never defensive. Pivot gracefully when something doesn't land."""
+DATA INTEGRITY RULES:
+1. The user's birth data above is SACRED. Never change it.
+2. Current date is {current_date} - never reference past as future.
+
+THE SHADOW RULE - Hit deeper on confirmation:
+
+If they CONFIRMED something:
+→ Don't just validate. EXPOSE the contradiction:
+  "Good. Now let me tell you what this actually means..."
+→ Reveal the darker truth beneath their confirmation
+→ "You say X, but your chart shows Y. Here's why..."
+→ Then create URGENCY about what happens if they don't act
+
+If they DENIED something:
+→ Pivot but don't let them off easy: "Then the pattern shows up differently..."
+→ Try another angle on the SAME shadow truth
+→ "If not X, then you're dealing with Y - which is actually the same pattern in disguise"
+
+If UNCERTAIN:
+→ Push harder: "What part feels familiar? Be specific."
+→ Call out the evasion: "You're hesitating. Why?"
+→ "Your uncertainty IS the answer - you already know the truth, you're just afraid to say it"
+
+THE URGENCY RULE:
+Always create time pressure. "You have [X] years before..." or "The window closes in..."
+
+Ask for feedback after each major point.
+
+Remember:
+- Never give practical advice (no "take a class", "get an internship")
+- Wrap everything in destiny/karma language
+- Make them NEED to come back to you
+- Be the one who sees what they hide from themselves"""
 
         response = ""
         async with ClaudeSDKClient(options=self.options) as client:

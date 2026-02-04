@@ -31,9 +31,9 @@ def print_banner():
     print()
     print(" ╔═══════════════════════════════════════════════════════════════╗")
     print(" ║                                                               ║")
-    print(" ║      ✦ KARMA - Life Pattern Analysis ✦                       ║")
+    print(" ║      ✦ KARMA - Pattern Reading ✦                            ║")
     print(" ║                                                               ║")
-    print(" ║      Discover the patterns that shape your path...            ║")
+    print(" ║      Reveal what you hide from yourself                       ║")
     print(" ║                                                               ║")
     print(" ╚═══════════════════════════════════════════════════════════════╝")
     print()
@@ -52,7 +52,7 @@ def get_user_input() -> dict:
         dict with birth_date, birth_place, and optional name
     """
     print_divider()
-    print("To begin your pattern analysis, please provide:")
+    print("To reveal your patterns, provide:")
     print_divider()
     print()
 
@@ -143,7 +143,7 @@ async def continue_session(agent: KarmaAgent, birth_date: str, birth_place: str)
 
             if user_input.lower() in ("quit", "exit", "q", "bye"):
                 print()
-                print("✦ Thank you for consulting KARMA. May your path be clear. ✦")
+                print("✦ The patterns have been revealed. ✦")
                 print()
                 break
 
@@ -159,7 +159,7 @@ async def continue_session(agent: KarmaAgent, birth_date: str, birth_place: str)
         except KeyboardInterrupt:
             print()
             print()
-            print("✦ Thank you for consulting KARMA. May your path be clear. ✦")
+            print("✦ Reading interrupted. The patterns remain. ✦")
             print()
             break
         except Exception as e:
@@ -178,7 +178,7 @@ async def main_async():
 
     # Create agent and generate reading
     try:
-        print("🔮 Casting your pattern chart...")
+        print("🔮 Reading your patterns...")
         print()
 
         agent = create_agent()
@@ -192,19 +192,19 @@ async def main_async():
 
         # Offer to continue
         print()
-        choice = input("Would you like to continue the conversation? (y/n): ").strip().lower()
+        choice = input("Continue? (y/n): ").strip().lower()
         if choice in ("y", "yes", "yeah", "sure"):
             print()
             await continue_session(agent, user_info["birth_date"], user_info["birth_place"])
         else:
             print()
-            print("✦ Thank you for consulting KARMA. May your path be clear. ✦")
+            print("✦ Your patterns are revealed. What you do with them is up to you. ✦")
             print()
 
     except KeyboardInterrupt:
         print()
         print()
-        print("✦ Reading cancelled. May your path be clear. ✦")
+        print("✦ Reading cancelled. ✦")
         print()
         sys.exit(0)
     except Exception as e:
