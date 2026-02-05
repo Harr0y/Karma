@@ -21,6 +21,8 @@ from claude_agent_sdk import (
     TextBlock,
     ResultMessage,
     ToolUseBlock,
+    UserMessage,
+    SystemMessage,
 )
 
 # Load environment variables from project root (.env in parent directory)
@@ -73,6 +75,46 @@ class KarmaAgent:
         user_dir = self.users_dir / user_id
         user_dir.mkdir(exist_ok=True)
         return user_dir
+
+    def _get_files_dir(self, user_id: str) -> Path:
+        """Get or create user files directory for code/artifacts."""
+        files_dir = self._get_user_dir(user_id) / "files"
+        files_dir.mkdir(exist_ok=True)
+        return files_dir
+
+    def _get_sessions_dir(self, user_id: str) -> Path:
+        """Get or create user sessions directory."""
+        sessions_dir = self._get_user_dir(user_id) / "sessions"
+        sessions_dir.mkdir(exist_ok=True)
+        return sessions_dir
+
+    def _create_session_log(self, user_id: str) -> Path:
+        """Create a new session log file with timestamp."""
+        sessions_dir = self._get_sessions_dir(user_id)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        session_path = sessions_dir / f"session_{timestamp}.log"
+        return session_path
+
+    def _log_to_session(self, session_path: Path, message: str):
+        """Write a log entry to the session file."""
+        with open(session_path, "a", encoding="utf-8") as f:
+            f.write(message + "\n")
+
+    def _save_agent_file(self, user_id: str, file_path: str, content: str):
+        """Save a file created by the agent to the user's files directory."""
+        files_dir = self._get_files_dir(user_id)
+
+        # Extract filename from the agent's file path
+        filename = Path(file_path).name
+
+        # Save to user's files directory
+        user_file_path = files_dir / filename
+        with open(user_file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.debug(f"💾 Saved agent file: {filename}")
+
+        return user_file_path
 
     def _save_conversation(self, user_id: str, role: str, content: str):
         """Append conversation entry to user's conversation history."""
@@ -226,11 +268,23 @@ Current date: {current_date}.
 
 Begin now."""
 
+        # Create session log file
+        session_path = self._create_session_log(user_id)
+
         logger.info("=" * 60)
-        logger.info("📤 SENDING QUERY TO CLAUDE")
+        logger.info(f"📤 SENDING QUERY TO CLAUDE (session: {session_path.name})")
         logger.info("=" * 60)
         logger.debug(f"Query prompt:\n{user_prompt}")
         logger.info("=" * 60)
+
+        # Log to session file
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, f"SESSION START: {datetime.now().isoformat()}")
+        self._log_to_session(session_path, f"USER: {greeting if name else 'friend'}")
+        self._log_to_session(session_path, f"BORN: {birth_date}")
+        self._log_to_session(session_path, f"BIRTH PLACE: {birth_place}")
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, "")
 
         reading = ""
         message_count = 0
@@ -239,25 +293,62 @@ Begin now."""
 
             async for message in client.receive_response():
                 message_count += 1
-                logger.debug(f"📥 MESSAGE #{message_count}: {type(message).__name__}")
+                msg_type = type(message).__name__
+                logger.debug(f"📥 MESSAGE #{message_count}: {msg_type}")
 
-                if isinstance(message, AssistantMessage):
+                # Log to session file
+                self._log_to_session(session_path, f"[{msg_type}] Message #{message_count}")
+
+                if isinstance(message, SystemMessage):
+                    # System prompt
+                    logger.debug(f"   (System message: {len(message.content)} chars)")
+                    self._log_to_session(session_path, f"  System: {message.content[:100]}...")
+
+                elif isinstance(message, AssistantMessage):
                     logger.debug(f"   Content blocks: {len(message.content)}")
+                    self._log_to_session(session_path, f"  Content blocks: {len(message.content)}")
+
                     for i, block in enumerate(message.content):
                         block_type = type(block).__name__
                         logger.debug(f"   Block #{i}: {block_type}")
+                        self._log_to_session(session_path, f"    Block #{i}: {block_type}")
 
                         if isinstance(block, TextBlock):
                             text_preview = block.text[:200] + ('...' if len(block.text) > 200 else '')
                             logger.info(f"✍️  TEXT: {text_preview}")
+                            self._log_to_session(session_path, f"      TEXT: {block.text}")
                             reading += block.text
 
                         elif isinstance(block, ToolUseBlock):
                             logger.info(f"🔧 TOOL CALL: {block.name}")
                             logger.debug(f"   Input: {block.input}")
 
+                            # Log tool call to session
+                            self._log_to_session(session_path, f"      TOOL: {block.name}")
+                            self._log_to_session(session_path, f"      INPUT: {json.dumps(block.input, indent=2)}")
+
+                            # Save files created by agent
+                            if block.name == "Write" and "file_path" in block.input:
+                                file_path = block.input.get("file_path", "")
+                                content = block.input.get("content", "")
+                                if content:
+                                    saved_path = self._save_agent_file(user_id, file_path, content)
+                                    self._log_to_session(session_path, f"      SAVED TO: {saved_path}")
+
+                elif isinstance(message, UserMessage):
+                    # Tool result
+                    logger.debug(f"   UserMessage (tool result)")
+                    self._log_to_session(session_path, f"  [Tool Result]")
+                    if hasattr(message, 'content') and message.content:
+                        for block in message.content:
+                            if hasattr(block, 'text'):
+                                result_preview = block.text[:200] + ('...' if len(block.text) > 200 else '')
+                                self._log_to_session(session_path, f"    {result_preview}")
+
                 elif isinstance(message, ResultMessage):
                     logger.debug("   ✅ ResultMessage - stream complete")
+                    self._log_to_session(session_path, f"  [Stream Complete]")
+                    self._log_to_session(session_path, "")
                     break
 
         logger.info("=" * 60)
@@ -265,6 +356,13 @@ Begin now."""
         logger.info("=" * 60)
         logger.debug(f"Complete reading:\n{reading}")
         logger.info("=" * 60)
+
+        # Final session log entry
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, "FINAL READING:")
+        self._log_to_session(session_path, reading)
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, f"SESSION END: {datetime.now().isoformat()}")
 
         # Save conversation
         self._save_conversation(user_id, "assistant", reading)
@@ -325,12 +423,22 @@ REMEMBER:
 - Never guess data. Write code if you need to calculate something.
 - Current date: {current_date}."""
 
+        # Create session log file
+        session_path = self._create_session_log(user_id)
+
         logger.info("=" * 60)
-        logger.info("📤 SENDING FOLLOW-UP QUERY TO CLAUDE")
+        logger.info(f"📤 SENDING FOLLOW-UP QUERY (session: {session_path.name})")
         logger.info("=" * 60)
         logger.debug(f"User feedback: {user_feedback[:100]}{'...' if len(user_feedback) > 100 else ''}")
         logger.debug(f"Follow-up prompt:\n{follow_up_prompt}")
         logger.info("=" * 60)
+
+        # Log to session file
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, f"FOLLOW-UP SESSION START: {datetime.now().isoformat()}")
+        self._log_to_session(session_path, f"USER FEEDBACK: {user_feedback[:200]}{'...' if len(user_feedback) > 200 else ''}")
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, "")
 
         response = ""
         message_count = 0
@@ -339,25 +447,57 @@ REMEMBER:
 
             async for message in client.receive_response():
                 message_count += 1
-                logger.debug(f"📥 MESSAGE #{message_count}: {type(message).__name__}")
+                msg_type = type(message).__name__
+                logger.debug(f"📥 MESSAGE #{message_count}: {msg_type}")
+
+                # Log to session file
+                self._log_to_session(session_path, f"[{msg_type}] Message #{message_count}")
 
                 if isinstance(message, AssistantMessage):
                     logger.debug(f"   Content blocks: {len(message.content)}")
+                    self._log_to_session(session_path, f"  Content blocks: {len(message.content)}")
+
                     for i, block in enumerate(message.content):
                         block_type = type(block).__name__
                         logger.debug(f"   Block #{i}: {block_type}")
+                        self._log_to_session(session_path, f"    Block #{i}: {block_type}")
 
                         if isinstance(block, TextBlock):
                             text_preview = block.text[:200] + ('...' if len(block.text) > 200 else '')
                             logger.info(f"✍️  TEXT: {text_preview}")
+                            self._log_to_session(session_path, f"      TEXT: {block.text}")
                             response += block.text
 
                         elif isinstance(block, ToolUseBlock):
                             logger.info(f"🔧 TOOL CALL: {block.name}")
                             logger.debug(f"   Input: {block.input}")
 
+                            # Log tool call to session
+                            self._log_to_session(session_path, f"      TOOL: {block.name}")
+                            self._log_to_session(session_path, f"      INPUT: {json.dumps(block.input, indent=2)}")
+
+                            # Save files created by agent
+                            if block.name == "Write" and "file_path" in block.input:
+                                file_path = block.input.get("file_path", "")
+                                content = block.input.get("content", "")
+                                if content:
+                                    saved_path = self._save_agent_file(user_id, file_path, content)
+                                    self._log_to_session(session_path, f"      SAVED TO: {saved_path}")
+
+                elif isinstance(message, UserMessage):
+                    # Tool result
+                    logger.debug(f"   UserMessage (tool result)")
+                    self._log_to_session(session_path, f"  [Tool Result]")
+                    if hasattr(message, 'content') and message.content:
+                        for block in message.content:
+                            if hasattr(block, 'text'):
+                                result_preview = block.text[:200] + ('...' if len(block.text) > 200 else '')
+                                self._log_to_session(session_path, f"    {result_preview}")
+
                 elif isinstance(message, ResultMessage):
                     logger.debug("   ✅ ResultMessage - stream complete")
+                    self._log_to_session(session_path, f"  [Stream Complete]")
+                    self._log_to_session(session_path, "")
                     break
 
         logger.info("=" * 60)
@@ -365,6 +505,13 @@ REMEMBER:
         logger.info("=" * 60)
         logger.debug(f"Complete response:\n{response}")
         logger.info("=" * 60)
+
+        # Final session log entry
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, "FINAL RESPONSE:")
+        self._log_to_session(session_path, response)
+        self._log_to_session(session_path, "=" * 60)
+        self._log_to_session(session_path, f"SESSION END: {datetime.now().isoformat()}")
 
         # Save conversation
         self._save_conversation(user_id, "user", user_feedback)
