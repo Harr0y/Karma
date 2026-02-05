@@ -2,3 +2,4 @@ claude-agent-sdk>=0.0.20
 mcp>=0.9.0
 python-dotenv>=1.0.0
 pytz>=2024.1
+python-telegram-bot>=21.0
