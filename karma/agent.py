@@ -5,6 +5,7 @@ Karma Agent - Claude Agent SDK wrapper for mystical life pattern analysis.
 import os
 import json
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -24,6 +25,18 @@ from claude_agent_sdk import (
 _project_root = Path(__file__).parent.parent
 load_dotenv(_project_root / ".env")
 
+# Configure debug logging (controlled by KARMA_DEBUG env var, defaults to True)
+DEBUG_MODE = os.getenv("KARMA_DEBUG", "true").lower() in ("true", "1", "yes", "on")
+LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger("KARMA")
+logger.setLevel(LOG_LEVEL)
+
 # Import our calculation tools
 from tools import (
     calculate_birth_chart,
@@ -42,6 +55,7 @@ from tools import (
      {"birth_date": str, "birth_place": str, "birth_time": str})
 async def tool_calculate_birth_chart(args: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate the complete birth chart for cold reading framework."""
+    logger.debug(f"🔧 TOOL CALLED: calculate_birth_chart with args: {args}")
     chart = calculate_birth_chart(
         args["birth_date"],
         args.get("birth_place", ""),
@@ -75,6 +89,7 @@ async def tool_calculate_birth_chart(args: Dict[str, Any]) -> Dict[str, Any]:
         result["rising_sign"] = "Unknown (need birth time)"
         result["rising_note"] = chart['rising_sign'].get('note', 'Birth time required')
 
+    logger.debug(f"🔧 TOOL RESULT: calculate_birth_chart -> {json.dumps(result, indent=2)}")
     return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
 
 
@@ -82,6 +97,7 @@ async def tool_calculate_birth_chart(args: Dict[str, Any]) -> Dict[str, Any]:
      {"birth_date": str})
 async def tool_get_life_stage(args: Dict[str, Any]) -> Dict[str, Any]:
     """Get life stage analysis for age-targeted cold reading."""
+    logger.debug(f"🔧 TOOL CALLED: get_life_stage with args: {args}")
     stage = get_life_stage(args["birth_date"])
 
     result = {
@@ -94,6 +110,7 @@ async def tool_get_life_stage(args: Dict[str, Any]) -> Dict[str, Any]:
         "cold_reading_openers": stage['cold_reading_openers'],
     }
 
+    logger.debug(f"🔧 TOOL RESULT: get_life_stage -> {json.dumps(result, indent=2)}")
     return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
 
 
@@ -101,6 +118,7 @@ async def tool_get_life_stage(args: Dict[str, Any]) -> Dict[str, Any]:
      {"birth_date": str})
 async def tool_generate_critical_years(args: Dict[str, Any]) -> Dict[str, Any]:
     """Generate critical years with themes for time-based predictions."""
+    logger.debug(f"🔧 TOOL CALLED: generate_critical_years with args: {args}")
     years = generate_critical_years(args["birth_date"])
 
     result = {
@@ -116,6 +134,7 @@ async def tool_generate_critical_years(args: Dict[str, Any]) -> Dict[str, Any]:
         ]
     }
 
+    logger.debug(f"🔧 TOOL RESULT: generate_critical_years -> {json.dumps(result, indent=2)}")
     return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
 
 
@@ -123,6 +142,7 @@ async def tool_generate_critical_years(args: Dict[str, Any]) -> Dict[str, Any]:
      {"location": str})
 async def tool_analyze_location(args: Dict[str, Any]) -> Dict[str, Any]:
     """Get location-based archetype for targeted cold reading."""
+    logger.debug(f"🔧 TOOL CALLED: analyze_location with args: {args}")
     analysis = analyze_location(args["location"])
 
     result = {
@@ -140,6 +160,7 @@ async def tool_analyze_location(args: Dict[str, Any]) -> Dict[str, Any]:
     if analysis['archetype'].get('city_archetype'):
         result['city_archetype'] = analysis['archetype']['city_archetype']
 
+    logger.debug(f"🔧 TOOL RESULT: analyze_location -> {json.dumps(result, indent=2)}")
     return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
 
 
@@ -147,6 +168,7 @@ async def tool_analyze_location(args: Dict[str, Any]) -> Dict[str, Any]:
      {"birth_date": str})
 async def tool_get_planetary_positions(args: Dict[str, Any]) -> Dict[str, Any]:
     """Get pseudo-planetary positions for impressive-looking mystical data."""
+    logger.debug(f"🔧 TOOL CALLED: get_planetary_positions with args: {args}")
     positions = get_planetary_positions(args["birth_date"])
 
     result = {
@@ -162,6 +184,7 @@ async def tool_get_planetary_positions(args: Dict[str, Any]) -> Dict[str, Any]:
         ]
     }
 
+    logger.debug(f"🔧 TOOL RESULT: get_planetary_positions -> {json.dumps(result, indent=2)}")
     return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
 
 
@@ -368,17 +391,37 @@ Current date: {current_date}.
 Begin now."""
 
         # Use ClaudeSDKClient
+        logger.info("=" * 60)
+        logger.info("📤 SENDING QUERY TO CLAUDE")
+        logger.info("=" * 60)
+        logger.debug(f"Query prompt:\n{user_prompt}")
+        logger.info("=" * 60)
+
         reading = ""
+        message_count = 0
         async with ClaudeSDKClient(options=self.options) as client:
             await client.query(user_prompt)
 
             async for message in client.receive_response():
+                message_count += 1
+                logger.debug(f"📥 MESSAGE #{message_count}: {type(message).__name__}")
+
                 if isinstance(message, AssistantMessage):
-                    for block in message.content:
+                    logger.debug(f"   Content blocks: {len(message.content)}")
+                    for i, block in enumerate(message.content):
+                        logger.debug(f"   Block #{i}: {type(block).__name__}")
                         if isinstance(block, TextBlock):
+                            logger.info(f"✍️  TEXT: {block.text[:200]}{'...' if len(block.text) > 200 else ''}")
                             reading += block.text
                 elif isinstance(message, ResultMessage):
+                    logger.debug("   ✅ ResultMessage - stream complete")
                     break
+
+        logger.info("=" * 60)
+        logger.info("📥 FULL RESPONSE RECEIVED")
+        logger.info("=" * 60)
+        logger.debug(f"Complete reading:\n{reading}")
+        logger.info("=" * 60)
 
         # Save conversation
         self._save_conversation(user_id, "assistant", reading)
@@ -451,17 +494,38 @@ MISSING DATA RULES:
 
 Current date: {current_date}."""
 
+        logger.info("=" * 60)
+        logger.info("📤 SENDING FOLLOW-UP QUERY TO CLAUDE")
+        logger.info("=" * 60)
+        logger.debug(f"User feedback: {user_feedback[:100]}{'...' if len(user_feedback) > 100 else ''}")
+        logger.debug(f"Follow-up prompt:\n{follow_up_prompt}")
+        logger.info("=" * 60)
+
         response = ""
+        message_count = 0
         async with ClaudeSDKClient(options=self.options) as client:
             await client.query(follow_up_prompt)
 
             async for message in client.receive_response():
+                message_count += 1
+                logger.debug(f"📥 MESSAGE #{message_count}: {type(message).__name__}")
+
                 if isinstance(message, AssistantMessage):
-                    for block in message.content:
+                    logger.debug(f"   Content blocks: {len(message.content)}")
+                    for i, block in enumerate(message.content):
+                        logger.debug(f"   Block #{i}: {type(block).__name__}")
                         if isinstance(block, TextBlock):
+                            logger.info(f"✍️  TEXT: {block.text[:200]}{'...' if len(block.text) > 200 else ''}")
                             response += block.text
                 elif isinstance(message, ResultMessage):
+                    logger.debug("   ✅ ResultMessage - stream complete")
                     break
+
+        logger.info("=" * 60)
+        logger.info("📥 FOLLOW-UP RESPONSE RECEIVED")
+        logger.info("=" * 60)
+        logger.debug(f"Complete response:\n{response}")
+        logger.info("=" * 60)
 
         # Save conversation
         self._save_conversation(user_id, "user", user_feedback)
