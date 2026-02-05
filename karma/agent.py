@@ -301,8 +301,8 @@ Begin now."""
 
                 if isinstance(message, SystemMessage):
                     # System prompt
-                    logger.debug(f"   (System message: {len(message.content)} chars)")
-                    self._log_to_session(session_path, f"  System: {message.content[:100]}...")
+                    logger.debug(f"   (System message)")
+                    self._log_to_session(session_path, f"  [System message - {message.subtype}]")
 
                 elif isinstance(message, AssistantMessage):
                     logger.debug(f"   Content blocks: {len(message.content)}")
