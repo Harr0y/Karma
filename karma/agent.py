@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     AssistantMessage,
     TextBlock,
     ResultMessage,
+    ToolUseBlock,
 )
 
 # Load environment variables from project root (.env in parent directory)
@@ -242,10 +243,18 @@ Begin now."""
                 if isinstance(message, AssistantMessage):
                     logger.debug(f"   Content blocks: {len(message.content)}")
                     for i, block in enumerate(message.content):
-                        logger.debug(f"   Block #{i}: {type(block).__name__}")
+                        block_type = type(block).__name__
+                        logger.debug(f"   Block #{i}: {block_type}")
+
                         if isinstance(block, TextBlock):
-                            logger.info(f"✍️  TEXT: {block.text[:200]}{'...' if len(block.text) > 200 else ''}")
+                            text_preview = block.text[:200] + ('...' if len(block.text) > 200 else '')
+                            logger.info(f"✍️  TEXT: {text_preview}")
                             reading += block.text
+
+                        elif isinstance(block, ToolUseBlock):
+                            logger.info(f"🔧 TOOL CALL: {block.name}")
+                            logger.debug(f"   Input: {block.input}")
+
                 elif isinstance(message, ResultMessage):
                     logger.debug("   ✅ ResultMessage - stream complete")
                     break
@@ -334,10 +343,18 @@ REMEMBER:
                 if isinstance(message, AssistantMessage):
                     logger.debug(f"   Content blocks: {len(message.content)}")
                     for i, block in enumerate(message.content):
-                        logger.debug(f"   Block #{i}: {type(block).__name__}")
+                        block_type = type(block).__name__
+                        logger.debug(f"   Block #{i}: {block_type}")
+
                         if isinstance(block, TextBlock):
-                            logger.info(f"✍️  TEXT: {block.text[:200]}{'...' if len(block.text) > 200 else ''}")
+                            text_preview = block.text[:200] + ('...' if len(block.text) > 200 else '')
+                            logger.info(f"✍️  TEXT: {text_preview}")
                             response += block.text
+
+                        elif isinstance(block, ToolUseBlock):
+                            logger.info(f"🔧 TOOL CALL: {block.name}")
+                            logger.debug(f"   Input: {block.input}")
+
                 elif isinstance(message, ResultMessage):
                     logger.debug("   ✅ ResultMessage - stream complete")
                     break
