@@ -1,5 +1,8 @@
 """
 Karma Agent - Claude Agent SDK wrapper for mystical life pattern analysis.
+
+This is a THIN wrapper around Claude Code's agentic capabilities.
+Claude decides: write code, search web, use MCPs. No pre-built tools.
 """
 
 import os
@@ -8,14 +11,12 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Optional
 
 from dotenv import load_dotenv
 from claude_agent_sdk import (
     ClaudeSDKClient,
     ClaudeAgentOptions,
-    create_sdk_mcp_server,
-    tool,
     AssistantMessage,
     TextBlock,
     ResultMessage,
@@ -37,181 +38,16 @@ logging.basicConfig(
 logger = logging.getLogger("KARMA")
 logger.setLevel(LOG_LEVEL)
 
-# Import our calculation tools
-from tools import (
-    calculate_birth_chart,
-    get_life_stage,
-    generate_critical_years,
-    analyze_location,
-    get_planetary_positions,
-)
-
-
-# ============================================================================
-# MCP TOOLS - Exposed to Claude
-# ============================================================================
-
-@tool("calculate_birth_chart", "Calculate complete mystical birth chart with zodiac, numerology, and Chinese zodiac",
-     {"birth_date": str, "birth_place": str, "birth_time": str})
-async def tool_calculate_birth_chart(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate the complete birth chart for cold reading framework."""
-    logger.debug(f"🔧 TOOL CALLED: calculate_birth_chart with args: {args}")
-    chart = calculate_birth_chart(
-        args["birth_date"],
-        args.get("birth_place", ""),
-        args.get("birth_time", "")
-    )
-
-    # Build result based on what data is certain
-    result = {
-        "sun_sign": f"{chart['sun_sign']['sign']} {chart['sun_sign']['symbol']} ({chart['sun_sign']['archetype']})",
-        "life_path_number": chart['life_path_number']['number'],
-        "life_path_archetype": chart['life_path_number']['archetype'],
-        "chinese_zodiac": chart['chinese_zodiac']['full_designation'],
-        "birth_date_formatted": chart['birth_date_formatted'],
-        "sun_traits": chart['sun_sign']['traits'],
-        "life_path_traits": chart['life_path_number']['traits'],
-        "has_birth_time": chart['has_birth_time'],
-    }
-
-    # Only include Moon/Rising if certain, otherwise mark as uncertain
-    if chart['moon_sign'].get('certain', False):
-        result["moon_sign"] = f"{chart['moon_sign']['sign']} {chart['moon_sign']['symbol']}"
-        result["moon_traits"] = chart['moon_sign']['traits']
-    else:
-        result["moon_sign"] = "Uncertain (changes during day - need birth time)"
-        result["moon_note"] = chart['moon_sign'].get('note', 'Birth time required')
-
-    if chart['rising_sign'].get('certain', False):
-        result["rising_sign"] = f"{chart['rising_sign']['sign']} {chart['rising_sign']['symbol']}"
-        result["rising_traits"] = chart['rising_sign']['traits']
-    else:
-        result["rising_sign"] = "Unknown (need birth time)"
-        result["rising_note"] = chart['rising_sign'].get('note', 'Birth time required')
-
-    logger.debug(f"🔧 TOOL RESULT: calculate_birth_chart -> {json.dumps(result, indent=2)}")
-    return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
-
-
-@tool("get_life_stage", "Get current life stage with themes and age-calibrated insights",
-     {"birth_date": str})
-async def tool_get_life_stage(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Get life stage analysis for age-targeted cold reading."""
-    logger.debug(f"🔧 TOOL CALLED: get_life_stage with args: {args}")
-    stage = get_life_stage(args["birth_date"])
-
-    result = {
-        "current_age": stage['current_age'],
-        "stage_name": stage['stage_name'],
-        "stage_progress": stage['stage_progress'],
-        "energy_reading": stage['energy_reading'],
-        "themes": stage['themes'][:5],
-        "typical_events": stage['typical_events'][:5],
-        "cold_reading_openers": stage['cold_reading_openers'],
-    }
-
-    logger.debug(f"🔧 TOOL RESULT: get_life_stage -> {json.dumps(result, indent=2)}")
-    return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
-
-
-@tool("generate_critical_years", "Generate critical timeline years for high-probability cold reading hits",
-     {"birth_date": str})
-async def tool_generate_critical_years(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Generate critical years with themes for time-based predictions."""
-    logger.debug(f"🔧 TOOL CALLED: generate_critical_years with args: {args}")
-    years = generate_critical_years(args["birth_date"])
-
-    result = {
-        "critical_years": [
-            {
-                "year": y['year'],
-                "age_at_time": y['age_at_time'],
-                "time_reference": y['time_reference'],
-                "theme": y['theme'],
-                "interpretation": y['interpretation'],
-            }
-            for y in years[:6]
-        ]
-    }
-
-    logger.debug(f"🔧 TOOL RESULT: generate_critical_years -> {json.dumps(result, indent=2)}")
-    return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
-
-
-@tool("analyze_location", "Analyze birth location for demographic and cultural archetype",
-     {"location": str})
-async def tool_analyze_location(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Get location-based archetype for targeted cold reading."""
-    logger.debug(f"🔧 TOOL CALLED: analyze_location with args: {args}")
-    analysis = analyze_location(args["location"])
-
-    result = {
-        "location": analysis['location'],
-        "interpretation": analysis['interpretation'],
-        "archetype": {
-            "city": analysis['archetype'].get('city'),
-            "zip_code": analysis['archetype'].get('zip_code'),
-        }
-    }
-
-    if analysis['archetype'].get('regional_archetype'):
-        result['regional_archetype'] = analysis['archetype']['regional_archetype']
-
-    if analysis['archetype'].get('city_archetype'):
-        result['city_archetype'] = analysis['archetype']['city_archetype']
-
-    logger.debug(f"🔧 TOOL RESULT: analyze_location -> {json.dumps(result, indent=2)}")
-    return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
-
-
-@tool("get_planetary_positions", "Get planetary positions for mystical framing",
-     {"birth_date": str})
-async def tool_get_planetary_positions(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Get pseudo-planetary positions for impressive-looking mystical data."""
-    logger.debug(f"🔧 TOOL CALLED: get_planetary_positions with args: {args}")
-    positions = get_planetary_positions(args["birth_date"])
-
-    result = {
-        "positions": [
-            {
-                "planet": planet,
-                "degree": pos['degree'],
-                "sign": pos['sign'],
-                "domain": pos['domain'],
-                "is_retrograde": pos['is_retrograde'],
-            }
-            for planet, pos in positions.items()
-        ]
-    }
-
-    logger.debug(f"🔧 TOOL RESULT: get_planetary_positions -> {json.dumps(result, indent=2)}")
-    return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
-
-
-# Create the SDK MCP server with our tools
-karma_mcp_server = create_sdk_mcp_server(
-    name="karma",
-    version="1.0.0",
-    tools=[
-        tool_calculate_birth_chart,
-        tool_get_life_stage,
-        tool_generate_critical_years,
-        tool_analyze_location,
-        tool_get_planetary_positions,
-    ]
-)
-
-
-# ============================================================================
-# KARMA AGENT
-# ============================================================================
 
 class KarmaAgent:
     """
-    Mystical life pattern analysis agent powered by Claude Agent SDK.
+    KARMA - Mystical life pattern analysis.
 
-    This agent uses cold reading techniques wrapped in mystical
-    symbolism to provide compelling "life readings."
+    This is a THIN wrapper. Claude Code does the heavy lifting:
+    - Writes code to calculate astrological data
+    - Searches web for information
+    - Uses available MCP servers
+    - Never guesses - always verifies
     """
 
     def __init__(self):
@@ -225,16 +61,8 @@ class KarmaAgent:
         # Load system prompt
         self.system_prompt = self._load_system_prompt()
 
-        # Configure options with MCP server and system prompt
+        # Configure options - NO pre-built tools, Claude decides what to use
         self.options = ClaudeAgentOptions(
-            mcp_servers={"karma": karma_mcp_server},
-            allowed_tools=[
-                "mcp__karma__calculate_birth_chart",
-                "mcp__karma__get_life_stage",
-                "mcp__karma__generate_critical_years",
-                "mcp__karma__analyze_location",
-                "mcp__karma__get_planetary_positions",
-            ],
             system_prompt=self.system_prompt,
         )
 
@@ -258,7 +86,7 @@ class KarmaAgent:
         with open(conv_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
 
-    def _save_profile(self, user_id: str, profile: Dict):
+    def _save_profile(self, user_id: str, profile: dict):
         """Save user profile information."""
         user_dir = self._get_user_dir(user_id)
         profile_path = user_dir / "profile.json"
@@ -274,6 +102,17 @@ class KarmaAgent:
         with open(profile_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=2)
 
+    def _load_profile(self, user_id: str) -> dict:
+        """Load user profile information."""
+        user_dir = self._get_user_dir(user_id)
+        profile_path = user_dir / "profile.json"
+
+        if not profile_path.exists():
+            return {}
+
+        with open(profile_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
     def _load_system_prompt(self) -> str:
         """Load the system prompt from file."""
         prompt_path = Path(__file__).parent / "prompts" / "system.txt"
@@ -286,8 +125,8 @@ class KarmaAgent:
         """Fallback system prompt if file not found."""
         return """You are KARMA. You reveal patterns.
 
-CRITICAL: Always use tools BEFORE making predictions.
-Never guess. If unsure, call the tools first.
+CRITICAL: Never guess astrological data. WRITE CODE to calculate it.
+When you need zodiac signs, life path numbers, or ages - write Python code.
 
 Make it sound like SPEECH:
 - Short sentences
@@ -295,17 +134,6 @@ Make it sound like SPEECH:
 - Talk directly to the user
 
 Hit the shadow. Create urgency. Don't coddle."""
-
-    def _load_profile(self, user_id: str) -> Dict:
-        """Load user profile information."""
-        user_dir = self._get_user_dir(user_id)
-        profile_path = user_dir / "profile.json"
-
-        if not profile_path.exists():
-            return {}
-
-        with open(profile_path, "r", encoding="utf-8") as f:
-            return json.load(f)
 
     def _get_current_date(self) -> str:
         """Get current date in readable format."""
@@ -346,51 +174,56 @@ Hit the shadow. Create urgency. Don't coddle."""
         }
         self._save_profile(user_id, profile)
 
-        # Build the prompt - KARMA style: speech-friendly, shadow strikes
         greeting = f"{name}" if name else "friend"
         current_date = self._get_current_date()
+
         user_prompt = f"""You are KARMA. You reveal patterns.
 
-User: {greeting}
-Born: {birth_date}
-Birth place: {birth_place}
-Today: {current_date}
+USER: {greeting}
+BORN: {birth_date}
+BIRTH PLACE: {birth_place}
+TODAY: {current_date}
 
-STEP 1: Call tools FIRST
-- calculate_birth_chart(birth_date="{birth_date}", birth_place="{birth_place}")
-- get_life_stage(birth_date="{birth_date}")
-- generate_critical_years(birth_date="{birth_date}")
+YOUR TASK:
+Generate a mystical life pattern reading.
 
-STEP 2: Check the tool results
+HOW TO APPROACH:
+
+1. GATHER DATA - WRITE CODE to calculate:
+   - Zodiac sign (from birth date)
+   - Life path number (numerology)
+   - Chinese zodiac (from birth year)
+   - Current age
+   - Critical life years
+
+   DO NOT GUESS. Write Python code to get accurate data.
+
+2. DELIVER YOUR READING
+
+   Write for SPEECH, not writing:
+   - Short sentences
+   - Natural pauses with "..."
+   - Talk directly to "you"
+   - No numbered lists
+   - No headers
+   - No technical jargon
+
+3. OPEN WITH IMPACT
+
+   - ONE truth from their pattern
+   - 2-3 specific time points
+   - ONE shadow truth about what they're hiding
+
+   End with: "Does that land?"
 
 MISSING DATA RULES:
-- If rising_sign says "Unknown" - NEVER mention Rising Sign
-- If moon_sign says "Uncertain" - DON'T claim a specific Moon sign
-- Use ONLY what you know for certain: Sun, Life Path, Chinese Zodiac
-
-STEP 3: Speak naturally
-
-Write for VOICE, not writing:
-- Short sentences
-- Pauses with "..." where you'd naturally pause
-- Talk directly to "you"
-- No numbered lists
-- No headers
-- No technical jargon
-
-STEP 4: Open with impact
-
-- ONE truth from their chart
-- 2-3 specific years from the tools
-- ONE shadow truth about what they're hiding
-
-End with: "Does that land?"
+- NO birth time = NO Rising sign (don't mention it)
+- Uncertain Moon = say "Moon was transitioning signs that day"
 
 Current date: {current_date}.
 
 Begin now."""
 
-        # Use ClaudeSDKClient
         logger.info("=" * 60)
         logger.info("📤 SENDING QUERY TO CLAUDE")
         logger.info("=" * 60)
@@ -447,23 +280,14 @@ Begin now."""
             The follow-up reading text
         """
         user_id = self.generate_user_id(birth_date, birth_place)
-        profile = self._load_profile(user_id)
         current_date = self._get_current_date()
-
-        # Extract chart data from profile if available, for data anchoring
-        chart_anchor = ""
-        if profile:
-            chart_anchor = f"""
-USER DATA (Never change these):
-- Born: {profile.get('birth_date', birth_date)} in {profile.get('birth_place', birth_place)}
-- Today: {current_date}
-"""
 
         follow_up_prompt = f"""You are KARMA. You reveal patterns.
 
-{chart_anchor}
+USER BORN: {birth_date} in {birth_place}
+TODAY: {current_date}
 
-User says: "{user_feedback}"
+USER SAYS: "{user_feedback}"
 
 HOW TO RESPOND:
 
@@ -487,12 +311,9 @@ WRITE FOR VOICE:
 
 End with: "Does that land?" or "Want me to go deeper?"
 
-MISSING DATA RULES:
-- Never mention Rising Sign unless you have birth time
-- Never claim specific Moon sign if tool says "Uncertain"
-- When unsure, call the tools again
-
-Current date: {current_date}."""
+REMEMBER:
+- Never guess data. Write code if you need to calculate something.
+- Current date: {current_date}."""
 
         logger.info("=" * 60)
         logger.info("📤 SENDING FOLLOW-UP QUERY TO CLAUDE")
