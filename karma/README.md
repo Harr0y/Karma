@@ -33,7 +33,14 @@ pip install -r requirements.txt
 # ANTHROPIC_AUTH_TOKEN=your-token
 # ANTHROPIC_BASE_URL=https://your-api-endpoint
 # ANTHROPIC_MODEL=claude-sonnet-4-20250514
+# TELEGRAM_BOT_TOKEN=your-telegram-bot-token  # For Telegram bot
 ```
+
+### Getting a Telegram Bot Token
+
+1. Open Telegram and search for `@BotFather`
+2. Send `/newbot` and follow the instructions
+3. Copy the token provided and add it to your `.env` file as `TELEGRAM_BOT_TOKEN`
 
 ## Usage
 
@@ -91,11 +98,33 @@ reading = initial_reading_sync(
 print(reading)
 ```
 
+### Telegram Bot
+
+```bash
+# Start the Telegram bot
+python telegram_bot.py
+```
+
+**Available Commands:**
+- `/start` - Begin your journey (provides birth information)
+- `/begin` - Start a new reading or restart your session
+- `/clear` - Clear your saved patterns
+- `/help` - Show help message
+
+After providing your birth information, simply message the bot with your questions or thoughts. The bot will remember each user's information for future conversations.
+
+**Setup steps:**
+1. Create a bot via `@BotFather` on Telegram
+2. Add the token to your `.env` file as `TELEGRAM_BOT_TOKEN`
+3. Run `python telegram_bot.py`
+4. Open your bot in Telegram and send `/start`
+
 ## Project Structure
 
 ```
 karma/
 ├── main.py              # CLI entry point
+├── telegram_bot.py      # Telegram bot interface
 ├── agent.py             # Claude SDK wrapper
 ├── tools/               # Mystical calculation tools
 │   ├── astrology.py     # Zodiac, numerology, birth charts
