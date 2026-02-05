@@ -62,8 +62,9 @@ class KarmaAgent:
         # Load system prompt
         self.system_prompt = self._load_system_prompt()
 
-        # Configure options - NO pre-built tools, Claude decides what to use
+        # Configure options - Use full claude_code preset (includes web search, all tools)
         self.options = ClaudeAgentOptions(
+            tools={"type": "preset", "preset": "claude_code"},
             system_prompt=self.system_prompt,
         )
 
