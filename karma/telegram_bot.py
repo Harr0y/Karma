@@ -90,17 +90,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
 
     await update.message.reply_text(
-        " ╔═══════════════════════════════════════╗\n"
-        " ║                                       ║\n"
-        " ║      ✦ KARMA - Pattern Reading ✦     ║\n"
-        " ║                                       ║\n"
-        " ║      Reveal what you hide             ║\n"
-        " ║      from yourself                    ║\n"
-        " ║                                       ║\n"
-        " ╚═══════════════════════════════════════╝\n\n"
-        "To reveal your patterns, I need to know when and where you entered this world.\n\n"
-        "📅 First, your birth date in YYYY-MM-DD format:\n"
-        "(For example: 1991-03-15)"
+        "                    ◈\n"
+        "           ✧  ·  ˚  ✦  ˚  ·  ✧\n"
+        "      ─────────────────────────────\n\n"
+        "              𝕶 𝕬 𝕽 𝕸 𝕬\n"
+        "           ᴛʜᴇ ᴘᴀᴛᴛᴇʀɴ ʀᴇᴀᴅᴇʀ\n\n"
+        "      ─────────────────────────────\n"
+        "           ✧  ·  ˚  ✦  ˚  ·  ✧\n\n"
+        "  ❝ What you call coincidence,\n"
+        "         I call destiny writing its first draft. ❞\n\n"
+        "  I see what you hide from yourself.\n"
+        "  The desires you've never spoken.\n"
+        "  The 3 AM thoughts that keep you awake.\n\n"
+        "  Are you ready?\n\n"
+        "      ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─\n\n"
+        "  📅  Enter your birth date\n"
+        "       Format: YYYY-MM-DD\n"
+        "       Example: 1991-03-15"
     )
 
     return BIRTH_DATE
@@ -112,9 +118,9 @@ async def get_birth_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not validate_date(date_str):
         await update.message.reply_text(
-            "⚠️ Invalid format. Please use YYYY-MM-DD\n"
-            "(For example: 1991-03-15)\n\n"
-            "Try again:"
+            "  ⚠️  The format seems off.\n\n"
+            "  Please use YYYY-MM-DD\n"
+            "  Example: 1991-03-15"
         )
         return BIRTH_DATE
 
@@ -124,9 +130,13 @@ async def get_birth_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_sessions[user_id]["birth_date"] = date_str
 
     await update.message.reply_text(
-        f"✓ Born: {date_str}\n\n"
-        f"📍 Now, your birth place:\n"
-        f"(ZIP Code or City, State - for example: Austin, TX)"
+        f"  ✧ {date_str} ✧\n\n"
+        "  The stars were aligned in a particular way\n"
+        "  on that day...\n\n"
+        "      ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─\n\n"
+        "  📍  Where did you enter this world?\n\n"
+        "       City, State or ZIP code\n"
+        "       Example: Austin, TX"
     )
 
     return BIRTH_PLACE
@@ -138,8 +148,8 @@ async def get_birth_place(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not birth_place:
         await update.message.reply_text(
-            "⚠️ Please enter a location.\n\n"
-            "Your birth place (ZIP Code or City, State):"
+            "  ⚠️  I need a location to read your patterns.\n\n"
+            "  City, State or ZIP code:"
         )
         return BIRTH_PLACE
 
@@ -147,9 +157,13 @@ async def get_birth_place(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_sessions[user_id]["birth_place"] = birth_place
 
     await update.message.reply_text(
-        f"✓ Born in: {birth_place}\n\n"
-        f"✨ Finally, your name (optional):\n"
-        f"Type your name or send /skip to skip this step."
+        f"  ✧ {birth_place} ✧\n\n"
+        "  The land remembers everyone\n"
+        "  who was born upon it...\n\n"
+        "      ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─\n\n"
+        "  ✨  One last thing — your name.\n\n"
+        "       Or type /skip if you prefer\n"
+        "       to remain anonymous."
     )
 
     return NAME
@@ -191,7 +205,11 @@ async def send_initial_reading(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.chat.send_action("typing")
 
     # Send a waiting message
-    waiting_msg = await update.message.reply_text("🔮 Reading your patterns...")
+    waiting_msg = await update.message.reply_text(
+        "  ◈ ─────────────────────── ◈\n\n"
+        "     Channeling the patterns...\n\n"
+        "  ◈ ─────────────────────── ◈"
+    )
 
     try:
         agent = create_agent()
@@ -206,7 +224,8 @@ async def send_initial_reading(update: Update, context: ContextTypes.DEFAULT_TYP
 
         # Send the reading
         await update.message.reply_text(
-            f"✦✦✦\n\n{reading}\n\n✦✦✦"
+            f"{reading}",
+            parse_mode="Markdown"
         )
 
     except Exception as e:
