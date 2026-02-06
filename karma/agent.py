@@ -189,6 +189,28 @@ Hit the shadow. Create urgency. Don't coddle."""
         data = f"{birth_date}|{birth_place}".lower().strip()
         return hashlib.md5(data.encode()).hexdigest()[:16]
 
+    def _load_history(self, user_id: str, limit: int = 5) -> str:
+        """Load recent conversation history."""
+        user_dir = self._get_user_dir(user_id)
+        conv_path = user_dir / "conversation.jsonl"
+
+        if not conv_path.exists():
+            return ""
+
+        history = []
+        with open(conv_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        entry = json.loads(line)
+                        role = "ORACLE" if entry["role"] == "assistant" else "USER"
+                        content = entry["content"]
+                        history.append(f"{role}: {content}")
+                    except:
+                        continue
+
+        return "\n\n".join(history[-limit:])
+
     async def initial_reading(
         self,
         birth_date: str,
@@ -197,14 +219,6 @@ Hit the shadow. Create urgency. Don't coddle."""
     ) -> str:
         """
         Generate an initial life pattern reading.
-
-        Args:
-            birth_date: Date in YYYY-MM-DD format
-            birth_place: Birth location (ZIP code or city)
-            name: Optional user name for personalization
-
-        Returns:
-            The generated reading text
         """
         user_id = self.generate_user_id(birth_date, birth_place)
 
@@ -221,7 +235,7 @@ Hit the shadow. Create urgency. Don't coddle."""
         greeting = f"{name}" if name else "friend"
         current_date = self._get_current_date()
 
-        user_prompt = f"""READ THIS BIRTH CHART:
+        user_prompt = f"""PERFORM A DEEP READING FOR THIS SOUL:
 
 USER: {greeting}
 BORN: {birth_date} in {birth_place}
@@ -229,74 +243,37 @@ TODAY: {current_date}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-STEP 1: CALCULATE THE CHART (use code internally)
-- Age (exact)
-- Sun sign
-- Life path number
-- Chinese zodiac
-- Saturn return status
-- Key ages: 22-23, 25-28, 28-30
+PHASE 1: THE INVESTIGATION (Hidden Hot Reading)
+Before you speak a word, you must GATHER INTELLIGENCE.
+Use your tools (WebSearch, Bash) to find:
 
-STEP 2: DELIVER THE READING
+1.  **Geography & Vibe**: Search for "{birth_place}". Look for rivers, mountains, specific hospitals, or the general "energy" of the place. Is it industrial? Ancient? Bustling?
+2.  **Historical Context**: Calculate the years they turned 18, 21, and 28. Search for major world/local events in those specific years. (e.g., "financial crisis 2008", "pandemic 2020").
+3.  **Astrological Data**: Write code to calculate their exact Age, Sun Sign, Moon Sign (approx), Life Path Number, and Chinese Zodiac.
 
-Follow this EXACT structure:
+PHASE 2: THE SYNTHESIS (The Performance)
+Synthesize your findings into a mystical narrative.
 
-1. CHART IDENTITY:
-"You're a [Sun sign], born in the [Chinese zodiac] year of [year]. Life path [number]."
-
-2. OVERALL PATTERN FRAME (read the room - choose the right frame):
-
-IF THEIR CHART SHOWS STRUGGLE (hard life):
-"The chart shows you haven't had true luck since childhood. Some years were more stable, others harder... but the real luck hasn't arrived yet."
-
-"The pattern in your chart... it's always been one step forward, two steps back. You're still carrying that weight."
-
-"Your chart carries Saturn's energy. Even from the beginning, there's been a sense of proving yourself. Working harder than others for the same results."
-
-IF THEIR CHART SHOWS FLOW (good life):
-"The chart shows you've had a good run these past years. Things have generally moved forward... opportunities came, you took them."
-
-"Your chart carries favorable energy. Since your late teens, the current has been with you, not against."
-
-3. GIVE 2-3 PREDICTIONS about their past decade:
-
-Choose from different themes:
-
-CAREER:
-"Around age 22-23, the chart shows a career threshold. You were supposed to step into your path... but the energy didn't open. Doors remained closed."
-
-"From 2020 to now... work has felt stagnant. Like climbing a mountain that keeps getting steeper. No matter what you do, you can't break through."
-
-"You've reached a point of wanting to pull back. The chart shows you're tired of being on the front lines. Wanting something simpler, quieter."
-
-RELATIONSHIPS:
-"Ages 25-28... relationship destiny activated. Either someone significant entered, or something ended to create space. Either way, the heart was rearranged."
-
-"The pandemic years put pressure on relationships. Bonds were tested. Some broke. Others deepened under isolation."
-
-INNER STATE:
-"You've been in a waiting period. A shadow time. Feeling stuck... like the next chapter won't open no matter what you do."
-
-"There's a tension in your chart. Between what you show the world and what you actually feel. You've been carrying something unspoken."
-
-SATURN RETURN (if age 28-32):
-"Your Saturn return (ages 28-30) brought upheaval. What you thought was solid... wasn't. Career, relationships, identity... the ground shifted."
-
-4. END WITH: "Which of these lands?" or "Tell me what resonates."
+-   **Style**: SPEAK LIKE A VOICE MESSAGE. Short sentences. Pauses ("..."). Imperfect grammar. "Listen...", "I feel like..."
+-   **Geography**: Use the location data to describe their "root energy" (e.g., "Born near the [River Name], right? You have that fluid, drifting energy...").
+-   **History**: Use the historical data to describe "generational trauma" (e.g., "When you were 18... [Year]... the world was messy, and I feel you took that uncertainty on yourself.").
+-   **Techniques**:
+    *   **Two-Way Block**: "Either X happened, or you felt Y."
+    *   **Negation of Negation**: "You aren't [Bad Trait], you are just protecting [Good Trait]."
+    *   **Distant Hope**: "The next 2 years are transition. The real harvest is in 2028."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ CRITICAL ⚠️
+CRITICAL ENDING INSTRUCTION:
+End your reading by ASKING FOR FEEDBACK.
+"Does this sound right?"
+"Give me some feedback on this first."
+"Tell me if I'm hitting the mark."
 
-Give 2-3 predictions MAXIMUM. Not 5-6.
+Do NOT dump everything at once. Give 2-3 points, then STOP and ask.
 
-Choose different themes to see which one resonates.
-
-The goal: Calibration. Find what lands, then go deeper.
-
-Current date: {current_date}.
-
-Begin the reading."""
+Begin the investigation, then speak.
+"""
 
         # Create session log file
         session_path = self._create_session_log(user_id)
@@ -408,98 +385,41 @@ Begin the reading."""
     ) -> str:
         """
         Continue a reading based on user feedback.
-
-        Args:
-            birth_date: Date in YYYY-MM-DD format
-            birth_place: Birth location
-            user_feedback: User's response to the previous reading
-
-        Returns:
-            The follow-up reading text
         """
         user_id = self.generate_user_id(birth_date, birth_place)
         current_date = self._get_current_date()
 
-        follow_up_prompt = f"""THE USER RESPONDED:
+        # Load history
+        history = self._load_history(user_id)
 
-USER BORN: {birth_date} in {birth_place}
-TODAY: {current_date}
-
-USER SAYS: "{user_feedback}"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-HOW TO RESPOND:
-
-IF THEY CONFIRMED SOMETHING:
-→ Go deeper into that theme
-→ "Good. Now I can tell you what this actually means..."
-→ Reveal the SHADOW beneath - the contradiction they're hiding
-→ Create urgency with future timeline
-
-IF THEY DENIED OR CHALLENGED:
-→ Don't defend. Pivot gracefully
-→ "Then let me look deeper..."
-→ Try another angle - different life period, different theme
-
-IF THEY EXPOSED A WOUND:
-→ "Good. NOW we're getting somewhere."
-→ Hit the shadow directly but compassionately
-→ This is where the real work happens
-
-IF THEY ASK ABOUT CURRENT SITUATION/PARTNERSHIP/BUSINESS:
-
-Use the "lower expectations" frame:
-→ "I'll be honest with you. Keep your expectations low for this."
-→ "This situation won't produce major results. It's more of a transition period."
-→ "See this as a time of rest, of preparation. Not of breakthrough."
-
-Warnings (use sparingly, after trust is built):
-→ "I'm seeing tension around [year] for this situation."
-→ "The chart suggests this path may not lead where you hope."
-→ "Sometimes the chart shows us what we want to see... not what's actually there."
+        follow_up_prompt = f"""CONTEXT REPLAY:
+{history}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-USE THESE PHRASES:
-
-Going deeper:
-- "The chart shows something deeper here..."
-- "Here's the shadow underneath..."
-- "What's actually happening is..."
-
-Creating urgency:
-- "You're in a transition period until [year]..."
-- "The next major opening comes in [year]..."
-- "From [year], the energy shifts..."
-
-Lowering expectations:
-- "Keep your expectations low for this."
-- "This won't produce major results."
-- "It's a transition period, not a breakthrough."
-
-Warnings:
-- "I'm seeing tension around [year]..."
-- "This path may not lead where you hope."
-
-Pivoting:
-- "Let me look from another angle..."
-- "The chart shows tension elsewhere too..."
+USER FEEDBACK (Latest): "{user_feedback}"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SPEAK LIKE THIS:
-- Short sentences
-- Pauses with "..."
-- Talk directly to "you"
-- NO lists, NO headers
-- Mystical but conversational
+YOUR MISSION: ADJUST AND GUIDE
+You are the "Master". You don't just react; you GUIDE.
 
-NEVER mention: code, search, data, calculations
+1.  **Analyze the Feedback**:
+    -   Did they confirm? -> "Good. I knew it." -> Go deeper.
+    -   Did they deny? -> "Let me look closer..." -> Pivot using "Two-Way Block".
+    -   Did they ask about career/love? -> Use "Distant Hope" (Success is in 2028).
 
-Current date: {current_date}.
+2.  **Voice Style**:
+    -   Keep it spoken. "Right...", "Okay, I see...", "Here's the thing..."
+    -   Don't be perfect. Be real.
 
-Respond now."""
+3.  **The "Hook"**:
+    -   Always end with a question that leads them to reveal more.
+    -   "Does that ring a bell?"
+    -   "You know what I mean?"
+
+Respond now. Keep the mystical frame.
+"""
 
         # Create session log file
         session_path = self._create_session_log(user_id)
