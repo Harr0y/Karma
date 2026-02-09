@@ -21,7 +21,9 @@ import sys
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List
+from pathlib import Path
+import re
 
 from dotenv import load_dotenv
 from telegram import Update
@@ -37,7 +39,7 @@ from telegram.ext import (
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from agent import KarmaAgent, create_agent
+from agent import KarmaAgent, create_agent, ReadingResponse
 
 # Load environment variables from project root
 _project_root = Path(__file__).parent.parent
@@ -55,6 +57,75 @@ BIRTH_DATE, BIRTH_PLACE, NAME = range(3)
 
 # Store active sessions
 user_sessions: Dict[int, Dict] = {}
+
+
+def remove_audio_markers(text: str) -> str:
+    """Remove [AUDIO_FILES: ...] markers from text."""
+    return re.sub(r'\[AUDIO_FILES:[^\]]+\]', '', text).strip()
+
+
+def clean_reading_text(text: str) -> str:
+    """Clean up agent output - remove technical notes, markers, and formatting noise."""
+    # Remove AUDIO_FILES markers
+    text = re.sub(r'\[AUDIO_FILES:[^\]]+\]', '', text)
+
+    # Remove Agent's internal monologue/thinking process (more comprehensive)
+    text = re.sub(r'I\'ll begin.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'I\'ll proceed.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'I need to proceed.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Let me work.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Now I\'ll generate.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Based on my investigation.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+    # Remove TECHNICAL NOTE sections
+    text = re.sub(r'\*?\*?\[?TECHNICAL NOTE\]?\*?\*?:?.*?(?=\n\n|\Z)', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+    # Remove horizontal lines (═══ or ─── or ***)
+    text = re.sub(r'[═─]{3,}', '', text)
+    text = re.sub(r'\*{3,}', '', text)
+
+    # Remove "THE READING BEGINS" / "THE READING" headers
+    text = re.sub(r'\*?\*?THE READING( BEGINS)?\*?\*?', '', text, flags=re.IGNORECASE)
+
+    # Remove markdown bold markers
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+
+    # Clean up excessive newlines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    # Clean up leading/trailing whitespace
+    text = text.strip()
+
+    return text
+
+
+async def send_voice_messages(update, audio_files: List[Path]):
+    """Send multiple voice messages in sequence."""
+    for i, audio_path in enumerate(audio_files):
+        try:
+            # Send voice action
+            await update.message.chat.send_action("record_voice")
+
+            # Small delay between messages for natural pacing
+            if i > 0:
+                await asyncio.sleep(0.5)
+
+            # Send as voice message (shows waveform in Telegram)
+            with open(audio_path, 'rb') as audio_file:
+                caption = f"Part {i+1}/{len(audio_files)}" if len(audio_files) > 1 else None
+                await update.message.reply_voice(
+                    voice=audio_file,
+                    caption=caption
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to send voice {audio_path}: {e}")
+            # Fallback: try as audio file
+            try:
+                with open(audio_path, 'rb') as audio_file:
+                    await update.message.reply_audio(audio=audio_file)
+            except Exception as e2:
+                logger.error(f"Failed to send audio fallback: {e2}")
 
 
 def validate_date(date_str: str) -> bool:
@@ -193,7 +264,7 @@ async def skip_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_initial_reading(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Generate and send the initial reading.
+    Generate and send the initial reading with voice messages.
 
     This is the core function that uses the KarmaAgent to generate
     a personalized reading based on the user's birth information.
@@ -213,7 +284,7 @@ async def send_initial_reading(update: Update, context: ContextTypes.DEFAULT_TYP
 
     try:
         agent = create_agent()
-        reading = await agent.initial_reading(
+        response = await agent.initial_reading(
             birth_date=session["birth_date"],
             birth_place=session["birth_place"],
             name=session.get("name"),
@@ -222,11 +293,22 @@ async def send_initial_reading(update: Update, context: ContextTypes.DEFAULT_TYP
         # Delete waiting message
         await waiting_msg.delete()
 
-        # Send the reading
-        await update.message.reply_text(
-            f"{reading}",
-            parse_mode="Markdown"
-        )
+        # Send text response (clean audio markers and technical notes)
+        clean_text = clean_reading_text(response.text)
+        if clean_text:
+            # Telegram message length limit is 4096 characters
+            MAX_TEXT_LENGTH = 4000  # Leave some buffer
+            if len(clean_text) > MAX_TEXT_LENGTH:
+                # Truncate with ellipsis
+                clean_text = clean_text[:MAX_TEXT_LENGTH-3] + "..."
+            await update.message.reply_text(
+                f"{clean_text}",
+                parse_mode="Markdown"
+            )
+
+        # Send voice messages in order
+        if response.audio_files:
+            await send_voice_messages(update, response.audio_files)
 
     except Exception as e:
         logger.error(f"Error generating reading: {e}")
@@ -238,7 +320,7 @@ async def send_initial_reading(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Handle follow-up messages from users.
+    Handle follow-up messages from users with voice output.
 
     After the initial reading, users can continue the conversation
     by sharing feedback or asking questions.
@@ -283,7 +365,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_feedback=user_input,
         )
 
-        await update.message.reply_text(f"✦\n\n{response}\n\n✦")
+        # Send text response (clean audio markers and technical notes)
+        clean_text = clean_reading_text(response.text)
+        if clean_text:
+            # Telegram message length limit is 4096 characters
+            MAX_TEXT_LENGTH = 4000  # Leave some buffer
+            if len(clean_text) > MAX_TEXT_LENGTH:
+                clean_text = clean_text[:MAX_TEXT_LENGTH-3] + "..."
+            await update.message.reply_text(f"✦\n\n{clean_text}\n\n✦")
+
+        # Send voice messages in order
+        if response.audio_files:
+            await send_voice_messages(update, response.audio_files)
 
     except Exception as e:
         logger.error(f"Error in follow-up: {e}")

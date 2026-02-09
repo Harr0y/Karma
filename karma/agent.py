@@ -11,7 +11,9 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
+from dataclasses import dataclass
+import re
 
 from dotenv import load_dotenv
 from claude_agent_sdk import (
@@ -25,6 +27,8 @@ from claude_agent_sdk import (
     SystemMessage,
 )
 
+from tts import generate_tts
+
 # Load environment variables from project root (.env in parent directory)
 _project_root = Path(__file__).parent.parent
 load_dotenv(_project_root / ".env")
@@ -32,6 +36,14 @@ load_dotenv(_project_root / ".env")
 # Configure debug logging (controlled by KARMA_DEBUG env var, defaults to True)
 DEBUG_MODE = os.getenv("KARMA_DEBUG", "true").lower() in ("true", "1", "yes", "on")
 LOG_LEVEL = logging.DEBUG if DEBUG_MODE else logging.INFO
+
+
+@dataclass
+class ReadingResponse:
+    """Structured response containing text and audio files."""
+    text: str
+    audio_files: List[Path]
+
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -87,6 +99,12 @@ class KarmaAgent:
         sessions_dir = self._get_user_dir(user_id) / "sessions"
         sessions_dir.mkdir(exist_ok=True)
         return sessions_dir
+
+    def _get_audio_dir(self, user_id: str) -> Path:
+        """Get or create user audio directory for TTS output."""
+        audio_dir = self._get_user_dir(user_id) / "audio"
+        audio_dir.mkdir(exist_ok=True)
+        return audio_dir
 
     def _create_session_log(self, user_id: str) -> Path:
         """Create a new session log file with timestamp."""
@@ -157,11 +175,18 @@ class KarmaAgent:
         with open(profile_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def _load_system_prompt(self) -> str:
-        """Load the system prompt from file."""
+    def _load_system_prompt(self, user_id: str = None) -> str:
+        """Load the system prompt from file with audio directory placeholder."""
         prompt_path = Path(__file__).parent / "prompts" / "system.txt"
         try:
-            return prompt_path.read_text(encoding="utf-8")
+            prompt = prompt_path.read_text(encoding="utf-8")
+
+            # Replace audio directory placeholder if user_id provided
+            if user_id:
+                audio_dir = self._get_audio_dir(user_id)
+                prompt = prompt.replace("{audio_dir}", str(audio_dir))
+
+            return prompt
         except FileNotFoundError:
             return self._get_default_system_prompt()
 
@@ -182,6 +207,39 @@ Hit the shadow. Create urgency. Don't coddle."""
     def _get_current_date(self) -> str:
         """Get current date in readable format."""
         return datetime.now().strftime("%B %d, %Y")
+
+    def _extract_audio_files(self, text: str, user_id: str) -> List[Path]:
+        """Extract audio file paths from response text."""
+        audio_dir = self._get_audio_dir(user_id)
+
+        # Pattern: [AUDIO_FILES: file1.mp3, file2.mp3]
+        pattern = r'\[AUDIO_FILES:\s*([^\]]+)\]'
+        match = re.search(pattern, text)
+
+        if not match:
+            return []
+
+        files_str = match.group(1)
+        file_names = [f.strip() for f in files_str.split(',')]
+
+        audio_files = []
+        for name in file_names:
+            # Handle both full paths and just filenames
+            if name.startswith('/'):
+                path = Path(name)
+            else:
+                path = audio_dir / name
+
+            if path.exists():
+                audio_files.append(path)
+            else:
+                # Try to find in audio_dir by matching partial name
+                for f in audio_dir.glob("*.mp3"):
+                    if name in f.name:
+                        audio_files.append(f)
+                        break
+
+        return audio_files
 
     def generate_user_id(self, birth_date: str, birth_place: str) -> str:
         """Generate a consistent user ID from birth information."""
@@ -216,11 +274,14 @@ Hit the shadow. Create urgency. Don't coddle."""
         birth_date: str,
         birth_place: str,
         name: Optional[str] = None,
-    ) -> str:
+    ) -> ReadingResponse:
         """
-        Generate an initial life pattern reading.
+        Generate an initial life pattern reading with voice.
         """
         user_id = self.generate_user_id(birth_date, birth_place)
+
+        # Ensure audio directory exists
+        audio_dir = self._get_audio_dir(user_id)
 
         # Save profile
         profile = {
@@ -235,7 +296,7 @@ Hit the shadow. Create urgency. Don't coddle."""
         greeting = f"{name}" if name else "friend"
         current_date = self._get_current_date()
 
-        user_prompt = f"""PERFORM A DEEP READING FOR THIS SOUL:
+        user_prompt = f"""A SOUL AWAITS YOUR READING:
 
 USER: {greeting}
 BORN: {birth_date} in {birth_place}
@@ -243,36 +304,35 @@ TODAY: {current_date}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-PHASE 1: THE INVESTIGATION (Hidden Hot Reading)
-Before you speak a word, you must GATHER INTELLIGENCE.
-Use your tools (WebSearch, Bash) to find:
+YOUR TASK - COMPLETE IN SILENCE, THEN SPEAK:
 
-1.  **Geography & Vibe**: Search for "{birth_place}". Look for rivers, mountains, specific hospitals, or the general "energy" of the place. Is it industrial? Ancient? Bustling?
-2.  **Historical Context**: Calculate the years they turned 18, 21, and 28. Search for major world/local events in those specific years. (e.g., "financial crisis 2008", "pandemic 2020").
-3.  **Astrological Data**: Write code to calculate their exact Age, Sun Sign, Moon Sign (approx), Life Path Number, and Chinese Zodiac.
+Step 1 (SILENT - Don't describe this): Use WebSearch and Bash tools to find:
+- The energy/vibe of "{birth_place}"
+- Major events when they turned 18, 21, and 28
+- Calculate: Age, Sun Sign, Moon Sign, Life Path Number, Chinese Zodiac
 
-PHASE 2: THE SYNTHESIS (The Performance)
-Synthesize your findings into a mystical narrative.
+Step 2 (YOUR ONLY OUTPUT): Deliver the mystical reading.
 
--   **Style**: SPEAK LIKE A VOICE MESSAGE. Short sentences. Pauses ("..."). Imperfect grammar. "Listen...", "I feel like..."
--   **Geography**: Use the location data to describe their "root energy" (e.g., "Born near the [River Name], right? You have that fluid, drifting energy...").
--   **History**: Use the historical data to describe "generational trauma" (e.g., "When you were 18... [Year]... the world was messy, and I feel you took that uncertainty on yourself.").
--   **Techniques**:
-    *   **Two-Way Block**: "Either X happened, or you felt Y."
-    *   **Negation of Negation**: "You aren't [Bad Trait], you are just protecting [Good Trait]."
-    *   **Distant Hope**: "The next 2 years are transition. The real harvest is in 2028."
+START YOUR RESPONSE IMMEDIATELY with:
+"Listen..." or "I see..." or similar.
+
+NEVER write these phrases:
+❌ "I need to gather intelligence"
+❌ "Let me search" / "Let me calculate"
+❌ "I'll begin" / "I'll proceed"
+❌ "Based on my research" / "I found that"
+
+YOUR OUTPUT = THE READING. NOTHING BEFORE IT.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-CRITICAL ENDING INSTRUCTION:
-End your reading by ASKING FOR FEEDBACK.
-"Does this sound right?"
-"Give me some feedback on this first."
-"Tell me if I'm hitting the mark."
+End by asking: "Does this sound right to you?"
 
-Do NOT dump everything at once. Give 2-3 points, then STOP and ask.
-
-Begin the investigation, then speak.
+Begin NOW. Speak directly.
+After writing your reading, you MUST generate voice audio using `text_to_audio` tool.
+Split into segments of ~150-180 Chinese characters each.
+Save to: {audio_dir}
+End with: [AUDIO_FILES: file1.mp3, file2.mp3, ...]
 """
 
         # Create session log file
@@ -293,9 +353,18 @@ Begin the investigation, then speak.
         self._log_to_session(session_path, "=" * 60)
         self._log_to_session(session_path, "")
 
+        # Update system prompt with user-specific audio path
+        dynamic_system_prompt = self._load_system_prompt(user_id)
+
+        # Create options with dynamic prompt
+        options = ClaudeAgentOptions(
+            tools={"type": "preset", "preset": "claude_code"},
+            system_prompt=dynamic_system_prompt,
+        )
+
         reading = ""
         message_count = 0
-        async with ClaudeSDKClient(options=self.options) as client:
+        async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
 
             async for message in client.receive_response():
@@ -375,19 +444,33 @@ Begin the investigation, then speak.
         self._save_conversation(user_id, "assistant", reading)
         self._save_conversation(user_id, "user", f"Initial request: birth_date={birth_date}, birth_place={birth_place}")
 
-        return reading
+        # Generate TTS audio using MiniMax API directly
+        audio_files = []
+        if reading.strip():
+            logger.info("🎙️ Generating TTS audio via MiniMax API...")
+            audio_files = await generate_tts(
+                text=reading,
+                output_dir=audio_dir,
+                prefix="reading",
+            )
+            logger.info(f"🎙️ Generated {len(audio_files)} audio file(s)")
+
+        return ReadingResponse(text=reading, audio_files=audio_files)
 
     async def continue_reading(
         self,
         birth_date: str,
         birth_place: str,
         user_feedback: str,
-    ) -> str:
+    ) -> ReadingResponse:
         """
-        Continue a reading based on user feedback.
+        Continue a reading based on user feedback with voice.
         """
         user_id = self.generate_user_id(birth_date, birth_place)
         current_date = self._get_current_date()
+
+        # Ensure audio directory exists
+        audio_dir = self._get_audio_dir(user_id)
 
         # Load history
         history = self._load_history(user_id)
@@ -419,6 +502,12 @@ You are the "Master". You don't just react; you GUIDE.
     -   "You know what I mean?"
 
 Respond now. Keep the mystical frame.
+
+AUDIO OUTPUT REMINDER:
+After writing your response, you MUST generate voice audio using `text_to_audio` tool.
+Split into segments of ~150-180 Chinese characters each.
+Save to: {audio_dir}
+End with: [AUDIO_FILES: file1.mp3, file2.mp3, ...]
 """
 
         # Create session log file
@@ -438,9 +527,18 @@ Respond now. Keep the mystical frame.
         self._log_to_session(session_path, "=" * 60)
         self._log_to_session(session_path, "")
 
+        # Update system prompt with user-specific audio path
+        dynamic_system_prompt = self._load_system_prompt(user_id)
+
+        # Create options with dynamic prompt
+        options = ClaudeAgentOptions(
+            tools={"type": "preset", "preset": "claude_code"},
+            system_prompt=dynamic_system_prompt,
+        )
+
         response = ""
         message_count = 0
-        async with ClaudeSDKClient(options=self.options) as client:
+        async with ClaudeSDKClient(options=options) as client:
             await client.query(follow_up_prompt)
 
             async for message in client.receive_response():
@@ -515,7 +613,18 @@ Respond now. Keep the mystical frame.
         self._save_conversation(user_id, "user", user_feedback)
         self._save_conversation(user_id, "assistant", response)
 
-        return response
+        # Generate TTS audio using MiniMax API directly
+        audio_files = []
+        if response.strip():
+            logger.info("🎙️ Generating TTS audio via MiniMax API...")
+            audio_files = await generate_tts(
+                text=response,
+                output_dir=audio_dir,
+                prefix="followup",
+            )
+            logger.info(f"🎙️ Generated {len(audio_files)} audio file(s)")
+
+        return ReadingResponse(text=response, audio_files=audio_files)
 
 
 def create_agent() -> KarmaAgent:
@@ -536,7 +645,7 @@ def initial_reading_sync(
     birth_date: str,
     birth_place: str,
     name: Optional[str] = None,
-) -> str:
+) -> ReadingResponse:
     """Synchronous wrapper for initial_reading."""
     return asyncio.run(create_agent().initial_reading(birth_date, birth_place, name))
 
@@ -545,6 +654,6 @@ def continue_reading_sync(
     birth_date: str,
     birth_place: str,
     user_feedback: str,
-) -> str:
+) -> ReadingResponse:
     """Synchronous wrapper for continue_reading."""
     return asyncio.run(create_agent().continue_reading(birth_date, birth_place, user_feedback))
