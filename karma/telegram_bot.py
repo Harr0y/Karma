@@ -39,7 +39,10 @@ from telegram.ext import (
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from agent import KarmaAgent, create_agent, ReadingResponse
+try:
+    from karma.agent import KarmaAgent, create_agent, ReadingResponse
+except ImportError:
+    from agent import KarmaAgent, create_agent, ReadingResponse
 
 # Load environment variables from project root
 _project_root = Path(__file__).parent.parent
@@ -70,12 +73,12 @@ def clean_reading_text(text: str) -> str:
     text = re.sub(r'\[AUDIO_FILES:[^\]]+\]', '', text)
 
     # Remove Agent's internal monologue/thinking process (more comprehensive)
-    text = re.sub(r'I\'ll begin.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'I\'ll proceed.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'I need to proceed.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'Let me work.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'Now I\'ll generate.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'Based on my investigation.*?(?=\n\n听着|\n\n听|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'I\'ll begin.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'I\'ll proceed.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'I need to proceed.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Let me work.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Now I\'ll generate.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'Based on my investigation.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
 
     # Remove TECHNICAL NOTE sections
     text = re.sub(r'\*?\*?\[?TECHNICAL NOTE\]?\*?\*?:?.*?(?=\n\n|\Z)', '', text, flags=re.DOTALL | re.IGNORECASE)

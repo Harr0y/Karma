@@ -46,3 +46,4 @@ karma/users/
 # OS
 .DS_Store
 Thumbs.db
+.alma-snapshots

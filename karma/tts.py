@@ -26,13 +26,13 @@ class MinimaxTTS:
     """MiniMax Text-to-Speech client using T2A v2 API."""
 
     # Default voice settings for mystical oracle persona
-    DEFAULT_VOICE_ID = "Charming_Lady"  # 神秘优雅女声
-    DEFAULT_SPEED = 0.95  # 略慢一点更有神秘感
+    DEFAULT_VOICE_ID = "Charming_Lady"  # 
+    DEFAULT_SPEED = 0.95  # 
     DEFAULT_VOL = 1.0
     DEFAULT_PITCH = 0
 
     # Segmentation settings
-    MAX_CHARS_PER_SEGMENT = 350  # ~60 seconds of audio (about 5-6 chars per second for Chinese)
+    MAX_CHARS_PER_SEGMENT = 500  # 更长的分段，减少语音条数（约80-90秒）
 
     def __init__(
         self,
