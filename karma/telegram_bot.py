@@ -22,7 +22,6 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Optional, Dict, List
-from pathlib import Path
 import re
 
 from dotenv import load_dotenv
@@ -62,44 +61,58 @@ BIRTH_DATE, BIRTH_PLACE, NAME = range(3)
 user_sessions: Dict[int, Dict] = {}
 
 
-def remove_audio_markers(text: str) -> str:
-    """Remove [AUDIO_FILES: ...] markers from text."""
-    return re.sub(r'\[AUDIO_FILES:[^\]]+\]', '', text).strip()
+MAX_TELEGRAM_TEXT_LENGTH = 4000
+_AUDIO_MARKER_RE = re.compile(r"\[AUDIO_FILES:[^\]]+\]", re.IGNORECASE)
+_SEPARATOR_RE = re.compile(r"^[\s═─*=-]{3,}$")
+_MARKDOWN_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
+_TECHNICAL_LINE_RE = re.compile(
+    r"^(?:\s*(?:\[?TECHNICAL NOTE\]?|I'll begin|I'll proceed|I need to proceed|"
+    r"Let me work|Now I'll generate|Based on my investigation))",
+    re.IGNORECASE,
+)
 
 
 def clean_reading_text(text: str) -> str:
-    """Clean up agent output - remove technical notes, markers, and formatting noise."""
-    # Remove AUDIO_FILES markers
-    text = re.sub(r'\[AUDIO_FILES:[^\]]+\]', '', text)
+    """
+    Normalize model output for Telegram display.
 
-    # Remove Agent's internal monologue/thinking process (more comprehensive)
-    text = re.sub(r'I\'ll begin.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'I\'ll proceed.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'I need to proceed.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'Let me work.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'Now I\'ll generate.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'Based on my investigation.*?(?=\n\n|\n\n|\n\nListen|\n\nThe)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    Keep this intentionally narrow:
+    - remove explicit audio markers
+    - remove obvious technical preamble lines
+    - remove separator-only lines
+    - normalize markdown bold and blank lines
+    """
+    if not text:
+        return ""
 
-    # Remove TECHNICAL NOTE sections
-    text = re.sub(r'\*?\*?\[?TECHNICAL NOTE\]?\*?\*?:?.*?(?=\n\n|\Z)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = _AUDIO_MARKER_RE.sub("", text)
+    lines = [line.rstrip() for line in text.splitlines()]
 
-    # Remove horizontal lines (═══ or ─── or ***)
-    text = re.sub(r'[═─]{3,}', '', text)
-    text = re.sub(r'\*{3,}', '', text)
+    filtered = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            filtered.append("")
+            continue
+        if _SEPARATOR_RE.match(stripped):
+            continue
+        if _TECHNICAL_LINE_RE.match(stripped):
+            continue
+        filtered.append(_MARKDOWN_BOLD_RE.sub(r"\1", line))
 
-    # Remove "THE READING BEGINS" / "THE READING" headers
-    text = re.sub(r'\*?\*?THE READING( BEGINS)?\*?\*?', '', text, flags=re.IGNORECASE)
-
-    # Remove markdown bold markers
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-
-    # Clean up excessive newlines
-    text = re.sub(r'\n{3,}', '\n\n', text)
-
-    # Clean up leading/trailing whitespace
-    text = text.strip()
-
+    text = "\n".join(filtered)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
     return text
+
+
+def format_telegram_text(text: str, limit: int = MAX_TELEGRAM_TEXT_LENGTH) -> str:
+    """Clean and truncate outgoing text for Telegram limits."""
+    cleaned = clean_reading_text(text)
+    if not cleaned:
+        return ""
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 3] + "..."
 
 
 async def send_voice_messages(update, audio_files: List[Path]):
@@ -297,17 +310,9 @@ async def send_initial_reading(update: Update, context: ContextTypes.DEFAULT_TYP
         await waiting_msg.delete()
 
         # Send text response (clean audio markers and technical notes)
-        clean_text = clean_reading_text(response.text)
+        clean_text = format_telegram_text(response.text)
         if clean_text:
-            # Telegram message length limit is 4096 characters
-            MAX_TEXT_LENGTH = 4000  # Leave some buffer
-            if len(clean_text) > MAX_TEXT_LENGTH:
-                # Truncate with ellipsis
-                clean_text = clean_text[:MAX_TEXT_LENGTH-3] + "..."
-            await update.message.reply_text(
-                f"{clean_text}",
-                parse_mode="Markdown"
-            )
+            await update.message.reply_text(clean_text)
 
         # Send voice messages in order
         if response.audio_files:
@@ -369,12 +374,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # Send text response (clean audio markers and technical notes)
-        clean_text = clean_reading_text(response.text)
+        clean_text = format_telegram_text(response.text)
         if clean_text:
-            # Telegram message length limit is 4096 characters
-            MAX_TEXT_LENGTH = 4000  # Leave some buffer
-            if len(clean_text) > MAX_TEXT_LENGTH:
-                clean_text = clean_text[:MAX_TEXT_LENGTH-3] + "..."
             await update.message.reply_text(f"✦\n\n{clean_text}\n\n✦")
 
         # Send voice messages in order
