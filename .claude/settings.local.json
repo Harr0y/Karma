@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__web-reader__webReader",
+      "mcp__web-search-prime__webSearchPrime",
+      "mcp__zread__get_repo_structure",
+      "mcp__zread__search_doc",
+      "mcp__zread__read_file",
+      "Bash(npm init:*)",
+      "Bash(npm install @anthropic-ai/claude-code-sdk)",
+      "Bash(export https_proxy=http://127.0.0.1:3128)",
+      "Bash(export http_proxy=http://127.0.0.1:3128)",
+      "Bash(export all_proxy=socks5://127.0.0.1:6153)",
+      "Bash(npm search @anthropic-ai)",
+      "Bash(npm view @anthropic-ai/claude-code)",
+      "Bash(npm view:*)",
+      "Bash(python3:*)",
+      "Bash(ls:*)",
+      "Bash(node:*)",
+      "Bash(npm install @anthropic-ai/claude-agent-sdk)",
+      "Bash(npx tsc:*)",
+      "Bash(npx tsx:*)"
+    ]
+  }
+}

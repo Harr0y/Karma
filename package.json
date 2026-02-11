@@ -1,0 +1,21 @@
+{
+  "name": "karmav2",
+  "version": "1.0.0",
+  "description": "Cold reading fortune-telling agent powered by Claude Agent SDK",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.39"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
