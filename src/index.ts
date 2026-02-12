@@ -1,6 +1,42 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createInterface } from 'readline/promises';
+import { appendFileSync, mkdirSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import { buildSystemPrompt } from './prompt.js';
+
+// ---------------------------------------------------------------------------
+// 日志系统 - 记录 Agent 完整调用过程
+// ---------------------------------------------------------------------------
+const LOG_DIR = join(homedir(), '.karmav2', 'logs');
+const LOG_FILE = join(LOG_DIR, `session-${new Date().toISOString().replace(/[:.]/g, '-')}.log`);
+
+function initLog() {
+  if (!existsSync(LOG_DIR)) {
+    mkdirSync(LOG_DIR, { recursive: true });
+  }
+  const header = `=== Karma v2 Session Log ===\nStarted: ${new Date().toLocaleString('zh-CN')}\n\n`;
+  appendFileSync(LOG_FILE, header);
+}
+
+function log(message: string, type: 'user' | 'agent' | 'system' | 'tool' = 'system') {
+  const timestamp = new Date().toLocaleTimeString('zh-CN');
+  const prefix = {
+    user: '[用户]',
+    agent: '[Agent]',
+    system: '[系统]',
+    tool: '[工具]',
+  }[type];
+  const line = `[${timestamp}] ${prefix} ${message}\n`;
+  appendFileSync(LOG_FILE, line);
+}
+
+function logAgentContent(text: string) {
+  // 记录完整内容，包括 inner_monologue
+  const timestamp = new Date().toLocaleTimeString('zh-CN');
+  const separator = `\n[${timestamp}] [Agent 原始输出]\n`;
+  appendFileSync(LOG_FILE, separator + text + '\n');
+}
 
 // ---------------------------------------------------------------------------
 // 戏剧感 Spinner
@@ -93,8 +129,21 @@ class MonologueFilter {
 
   /** 刷新剩余内容 */
   flush(): void {
-    if (!this.insideMonologue && this.buffer.length > 0) {
-      this.emit(this.buffer);
+    log(`flush() called, insideMonologue=${this.insideMonologue}, buffer.length=${this.buffer.length}`, 'system');
+    // 流结束时，强制输出所有剩余内容（即使 insideMonologue 为 true 也输出）
+    // 因为 Agent 可能被截断，结束标签没到达
+    if (this.buffer.length > 0) {
+      if (this.insideMonologue) {
+        // 如果还在 monologue 内部，说明被截断了，清除 inner_monologue 标签残余后输出
+        // 移除可能的开始标签残余
+        const cleaned = this.buffer.replace(/<inner_monologue>?/g, '');
+        if (cleaned.length > 0) {
+          log(`flush() 强制输出截断内容: ${cleaned.length} 字符`, 'system');
+          this.emit(cleaned);
+        }
+      } else {
+        this.emit(this.buffer);
+      }
       this.buffer = '';
     }
   }
@@ -108,6 +157,7 @@ class MonologueFilter {
     const trimmed = text.trim();
     if (trimmed.length === 0 && !this.hasOutput) return;
 
+    log(`emit() 输出 ${text.length} 字符`, 'system');
     process.stdout.write(text);
     this.hasOutput = true;
   }
@@ -117,6 +167,11 @@ class MonologueFilter {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
+  // 初始化日志
+  initLog();
+  log('会话开始', 'system');
+  log(`日志文件: ${LOG_FILE}`, 'system');
+
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   let sessionId: string | undefined;
 
@@ -124,13 +179,13 @@ async function main() {
   const systemPrompt = buildSystemPrompt(new Date());
 
   console.log('\n  \x1b[33m✦ Karma 大师 ✦\x1b[0m\n');
+  console.log(`  \x1b[90m[日志文件: ${LOG_FILE}]\x1b[0m\n`);
 
   const baseOptions = {
     systemPrompt,
     tools: ['WebSearch', 'WebFetch', 'Read', 'Write', 'Edit'] as string[],
     permissionMode: 'bypassPermissions' as const,
     allowDangerouslySkipPermissions: true,
-    maxTurns: 50,
     cwd: '/tmp',
     env: { ...process.env },
   };
@@ -145,6 +200,7 @@ async function main() {
       // 捕获 session_id
       if (msg.type === 'system' && msg.subtype === 'init') {
         sessionId = msg.session_id;
+        log(`Session ID: ${msg.session_id}`, 'system');
       }
 
       // 工具调用/工具进度 → 显示 spinner
@@ -153,11 +209,17 @@ async function main() {
         spinnerActive = true;
       }
 
+      // 记录工具调用
+      if (msg.type === 'tool_use_summary') {
+        log(`工具调用: ${msg.tool_name || msg.tool}`, 'tool');
+      }
+
       if (msg.type === 'assistant' && msg.message?.content) {
         for (const block of msg.message.content) {
           if (block.type === 'tool_use' && !spinnerActive) {
             spinner = showMysticalSpinner();
             spinnerActive = true;
+            log(`调用工具: ${block.name}`, 'tool');
           }
           if (block.type === 'text') {
             // 有文本输出，停止 spinner
@@ -167,6 +229,8 @@ async function main() {
               spinnerActive = false;
               clearLine();
             }
+            // 记录完整内容（包括 inner_monologue）
+            logAgentContent(block.text);
             filter.process(block.text);
           }
         }
@@ -180,6 +244,7 @@ async function main() {
           spinnerActive = false;
           clearLine();
         }
+        log('本轮对话结束', 'system');
       }
     }
 
@@ -193,7 +258,7 @@ async function main() {
   try {
     await processAgentTurn(
       query({
-        prompt: '一位新的客人到来了。请按照你的方法论开始接待。用温和有仪式感的方式向客人打招呼，并收集他们的基本信息。',
+        prompt: '一位新的客人到来了。请按照你的方法论开始接待。简单直接地向客人打招呼，请他们把生辰时间、性别和出生地发给你。不要搞仪式感，像真师傅一样随意自然。',
         options: baseOptions,
       }),
     );
@@ -213,11 +278,15 @@ async function main() {
     }
 
     if (userInput.trim().toLowerCase() === 'exit' || userInput.trim() === '退出') {
+      log('用户退出会话', 'user');
       console.log('\n  \x1b[33m✦ Karma 大师已退出 ✦\x1b[0m\n');
       break;
     }
 
     if (userInput.trim().length === 0) continue;
+
+    // 记录用户输入
+    log(userInput, 'user');
 
     try {
       await processAgentTurn(
