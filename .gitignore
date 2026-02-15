@@ -1,3 +1,6 @@
+# Dependencies
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -26,14 +29,22 @@ ENV/
 env/
 .venv
 
-# Environment variables (sensitive!)
+# Environment variables
 .env
+.env.local
 **/.env
+
+# Database
+*.db
+*.db-journal
+
+# Logs
+*.log
 
 # Claude Code settings
 .claude/
 
-# Karma user data
+# Karma user data (V2)
 karma/users/
 
 # IDE
@@ -47,3 +58,10 @@ karma/users/
 .DS_Store
 Thumbs.db
 .alma-snapshots
+
+# Test coverage
+coverage/
+
+# Misc
+~/
+*.tgz
