@@ -1,0 +1,26 @@
+# Karma 配置文件
+
+# AI 配置
+ai:
+  # API 配置
+  authToken: ${ANTHROPIC_AUTH_TOKEN:}
+  baseUrl: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+  model: ${ANTHROPIC_MODEL:claude-sonnet-4-5-20250929}
+  timeout: ${API_TIMEOUT_MS:300000}
+
+# 存储配置
+storage:
+  type: sqlite
+  path: ~/.karma/karma.db
+
+# Skills 配置
+skills:
+  dirs:
+    - ~/.karma/skills
+    - ./skills
+  autoLoad: true
+
+# 日志配置
+logging:
+  level: info
+  file: ~/.karma/logs/karma.log

@@ -1,0 +1,38 @@
+{
+  "name": "karma",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Karma - AI Fortune Telling Agent",
+  "main": "dist/index.js",
+  "bin": {
+    "karma": "dist/index.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.77",
+    "better-sqlite3": "^11.7.0",
+    "drizzle-orm": "^0.39.3",
+    "glob": "^13.0.3",
+    "gray-matter": "^4.0.3",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "drizzle-kit": "^0.30.4",
+    "tsx": "^4.20.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
