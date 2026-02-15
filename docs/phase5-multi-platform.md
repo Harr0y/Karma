@@ -1,6 +1,6 @@
-# Karma V3 Phase 5: 多平台适配器设计
+# Karma V3 Phase 5: 多平台适配器设计 (合并版)
 
-> 参考 disclaude 实现，设计可扩展的多平台架构
+> 合并 phase5-multi-platform.md 和 MULTI_PLATFORM_ARCHITECTURE.md
 
 ---
 
@@ -21,491 +21,442 @@
 | Feishu | 🎯 Phase 5 | 企业通讯，卡片消息 |
 | Discord | 🔮 未来 | 游戏社区，Embed |
 | Telegram | 🔮 未来 | 开放API，Bot |
-| WeChat | 🔮 未来 | 企业微信/公众号 |
 
 ---
 
-## 二、架构设计
-
-### 2.1 分层架构
+## 二、整体架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   Platform Adapters                          │
+│                     Platform Layer                           │
 │  ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌──────────┐       │
 │  │   CLI   │  │ Feishu  │  │ Discord  │  │ Telegram │       │
+│  │ Adapter │  │ Adapter │  │ Adapter  │  │ Adapter  │       │
 │  └────┬────┘  └────┬────┘  └────┬─────┘  └────┬─────┘       │
 │       │            │            │             │              │
-│       └────────────┴────────────┴─────────────┘              │
+│       └────────────┴─────┬──────┴─────────────┘              │
 │                          │                                   │
-│                          ▼                                   │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │              Platform Interface                        │   │
-│  │  - sendMessage(chatId, content)                        │   │
-│  │  - sendFile(chatId, file)                              │   │
-│  │  - sendImage(chatId, image)                            │   │
-│  │  - sendAudio(chatId, audio)                            │   │
-│  └───────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Agent Core                               │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐    │
-│  │ Agent Runner  │  │ Session Mgr   │  │ Storage       │    │
-│  └───────────────┘  └───────────────┘  └───────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Claude Agent SDK                          │
-└─────────────────────────────────────────────────────────────┘
+├──────────────────────────┼───────────────────────────────────┤
+│                  Message Router                              │
+│           (去重、时效检查、Bot消息过滤)                        │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+┌──────────────────────────┴───────────────────────────────────┐
+│                   Session Manager                             │
+│         (多平台会话管理、SDK resume、复合键)                    │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+┌──────────────────────────┴───────────────────────────────────┐
+│                    Agent Runner                               │
+│         (SDK 调用、消息过滤、流式处理)                         │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+┌──────────────────────────┴───────────────────────────────────┐
+│                    Output Adapter                             │
+│      (平台特定的输出格式化：文本、卡片、语音、图片、节流)       │
+└──────────────────────────────────────────────────────────────┘
+                           │
+┌──────────────────────────┴───────────────────────────────────┐
+│                     Storage Layer                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐             │
+│  │   Clients   │ │  Sessions   │ │    Facts    │             │
+│  └─────────────┘ └─────────────┘ └─────────────┘             │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 核心接口定义
+---
+
+## 三、核心接口定义
+
+### 3.1 平台类型
 
 ```typescript
 // src/platform/types.ts
 
-/**
- * 消息类型
- */
-export type MessageType = 'text' | 'image' | 'audio' | 'file' | 'card';
+export type Platform = 'cli' | 'feishu' | 'discord' | 'telegram';
 
-/**
- * 消息内容
- */
-export interface MessageContent {
-  type: MessageType;
-  text?: string;
-  mediaUrl?: string;
-  mediaData?: Buffer;
-  fileName?: string;
-  mimeType?: string;
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * 平台事件
- */
-export interface PlatformEvent {
-  platform: 'cli' | 'feishu' | 'discord' | 'telegram' | 'wechat';
+export interface IncomingMessage {
+  id: string;
+  platform: Platform;
   chatId: string;
   userId?: string;
-  messageId: string;
-  timestamp: Date;
-  content: MessageContent;
+  senderType: 'user' | 'bot';
+  text?: string;
+  media?: MediaContent;
+  timestamp: number;
   replyTo?: string;
 }
 
-/**
- * 平台适配器接口
- */
+export interface MediaContent {
+  type: 'image' | 'audio' | 'video' | 'file';
+  fileId: string;
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+  localPath?: string;
+}
+
+export interface SendMessageOptions {
+  type?: 'text' | 'card' | 'image' | 'audio' | 'file';
+  replyTo?: string;
+  metadata?: Record<string, any>;
+}
+```
+
+### 3.2 PlatformAdapter 接口
+
+```typescript
 export interface PlatformAdapter {
-  readonly platform: string;
-
-  // 消息发送
-  sendMessage(chatId: string, content: MessageContent): Promise<void>;
-  sendText(chatId: string, text: string): Promise<void>;
-  sendImage(chatId: string, image: Buffer | string, caption?: string): Promise<void>;
-  sendFile(chatId: string, file: Buffer | string, fileName: string): Promise<void>;
-  sendAudio(chatId: string, audio: Buffer | string, duration?: number): Promise<void>;
-
-  // 批量发送（流式优化）
-  sendBatch(chatId: string, contents: MessageContent[]): Promise<void>;
-
-  // 消息管理
-  deleteMessage(chatId: string, messageId: string): Promise<void>;
-  editMessage(chatId: string, messageId: string, content: MessageContent): Promise<void>;
+  readonly platform: Platform;
 
   // 生命周期
   start(): Promise<void>;
   stop(): Promise<void>;
   isRunning(): boolean;
+
+  // 消息发送
+  sendMessage(chatId: string, content: string, options?: SendMessageOptions): Promise<string>;
+  sendCard?(chatId: string, card: any): Promise<string>;
+  sendImage?(chatId: string, image: ImageContent): Promise<string>;
+  sendAudio?(chatId: string, audio: AudioContent): Promise<string>;
+  sendFile?(chatId: string, file: FileContent): Promise<string>;
+
+  // 媒体处理
+  downloadMedia?(media: MediaContent): Promise<string>;
+
+  // 事件
+  onMessage(handler: MessageHandler): void;
 }
 
-/**
- * 平台事件处理器
- */
-export interface PlatformEventHandler {
-  onMessage(event: PlatformEvent): Promise<void>;
-  onFile?(event: PlatformEvent): Promise<void>;
-  onImage?(event: PlatformEvent): Promise<void>;
-  onAudio?(event: PlatformEvent): Promise<void>;
-  onCommand?(event: PlatformEvent, command: string, args: string[]): Promise<void>;
+export type MessageHandler = (message: IncomingMessage) => Promise<void>;
+```
+
+---
+
+## 四、MessageRouter（消息路由器）
+
+> 参考 MULTI_PLATFORM_ARCHITECTURE.md
+
+```typescript
+// src/platform/router.ts
+
+export interface MessageRouterConfig {
+  maxMessageAge?: number;        // 消息最大年龄（毫秒）
+  deduplicationTTL?: number;     // 去重缓存时间
 }
 
-/**
- * 平台配置
- */
-export interface PlatformConfig {
-  enabled: boolean;
-  [key: string]: unknown;
+export class MessageRouter {
+  private processedMessages = new Map<string, number>();
+  private handlers: MessageHandler[] = [];
+
+  constructor(private config: MessageRouterConfig = {}) {
+    this.config.maxMessageAge ??= 24 * 60 * 60 * 1000; // 24 小时
+    this.config.deduplicationTTL ??= 60 * 60 * 1000;   // 1 小时
+  }
+
+  async route(message: IncomingMessage): Promise<void> {
+    // 1. 去重检查
+    if (this.isDuplicate(message.id)) {
+      console.log('[Router] 跳过重复消息:', message.id);
+      return;
+    }
+
+    // 2. 时效性检查
+    if (this.isExpired(message)) {
+      console.log('[Router] 跳过过期消息:', message.id);
+      return;
+    }
+
+    // 3. Bot 自消息过滤
+    if (message.senderType === 'bot') {
+      console.log('[Router] 跳过 Bot 消息');
+      return;
+    }
+
+    // 4. 标记已处理
+    this.markProcessed(message.id);
+
+    // 5. 分发给处理器
+    for (const handler of this.handlers) {
+      try {
+        await handler(message);
+      } catch (err) {
+        console.error('[Router] 处理器错误:', err);
+      }
+    }
+  }
+
+  onMessage(handler: MessageHandler): void {
+    this.handlers.push(handler);
+  }
+
+  private isDuplicate(messageId: string): boolean {
+    const processed = this.processedMessages.get(messageId);
+    if (!processed) return false;
+    return Date.now() - processed < this.config.deduplicationTTL!;
+  }
+
+  private isExpired(message: IncomingMessage): boolean {
+    return Date.now() - message.timestamp > this.config.maxMessageAge!;
+  }
+
+  private markProcessed(messageId: string): void {
+    this.processedMessages.set(messageId, Date.now());
+    this.cleanupOldEntries();
+  }
+
+  private cleanupOldEntries(): void {
+    const now = Date.now();
+    for (const [id, timestamp] of this.processedMessages) {
+      if (now - timestamp > this.config.deduplicationTTL!) {
+        this.processedMessages.delete(id);
+      }
+    }
+  }
 }
 ```
 
 ---
 
-## 三、参考 disclaude 实现
+## 五、OutputAdapter（输出适配器）
 
-### 3.1 disclaude 架构分析
+### 5.1 接口定义
 
+```typescript
+// src/output/types.ts
+
+export type OutputMessageType = 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'error' | 'complete';
+
+export interface OutputContent {
+  type: OutputMessageType;
+  text: string;
+  metadata?: {
+    toolName?: string;
+    duration?: number;
+    [key: string]: any;
+  };
+}
+
+export interface OutputAdapter {
+  readonly platform: Platform;
+  readonly chatId: string;
+  write(content: OutputContent): Promise<void>;
+  flush?(): Promise<void>;
+}
 ```
-disclaude/src/feishu/
-├── bot.ts                    # 主机器人入口
-├── message-sender.ts         # 消息发送
-├── message-router.ts         # 消息路由
-├── file-handler.ts           # 文件处理
-├── file-downloader.ts        # 文件下载
-├── file-uploader.ts          # 文件上传
-├── attachment-manager.ts     # 附件管理
-├── content-builder.ts        # 内容构建
-├── message-logger.ts         # 消息日志
-├── message-history.ts        # 历史记录
-├── task-flow-orchestrator.ts # 任务流编排
-├── command-handlers.ts       # 命令处理
-└── diff-card-builder.ts      # 卡片构建
+
+### 5.2 CLI OutputAdapter
+
+```typescript
+// src/output/adapters/cli.ts
+
+export class CLIOutputAdapter implements OutputAdapter {
+  readonly platform: Platform = 'cli';
+
+  constructor(readonly chatId: string) {}
+
+  async write(content: OutputContent): Promise<void> {
+    const colored = this.colorize(content);
+    process.stdout.write(colored);
+  }
+
+  private colorize(content: OutputContent): string {
+    const colors: Record<OutputMessageType, string> = {
+      text: '\x1b[0m',
+      thinking: '\x1b[90m',
+      tool_use: '\x1b[33m',
+      tool_result: '\x1b[32m',
+      error: '\x1b[31m',
+      complete: '\x1b[36m',
+    };
+    return `${colors[content.type]}${content.text}\x1b[0m`;
+  }
+}
 ```
 
-**关键设计**:
-1. `MessageSender` - 统一发送接口
-2. `FileHandler` - 文件处理抽象
-3. `TaskFlowOrchestrator` - 任务流管理
+### 5.3 Feishu OutputAdapter（带节流）
 
-### 3.2 借鉴要点
+```typescript
+// src/output/adapters/feishu.ts
 
-| 模块 | disclaude | Karma 借鉴 |
-|------|-----------|-----------|
-| 消息发送 | MessageSender | PlatformAdapter.sendMessage |
-| 文件处理 | FileHandler | PlatformAdapter.sendFile/sendImage |
-| 附件管理 | AttachmentManager | MediaManager (新建) |
-| 消息历史 | MessageHistory | 已有 StorageService |
-| 任务流 | TaskFlowOrchestrator | 不需要 (SDK 内置) |
+export class FeishuOutputAdapter implements OutputAdapter {
+  readonly platform: Platform = 'feishu';
+
+  private platformAdapter: PlatformAdapter;
+  private buffer: string[] = [];
+  private lastSendTime = 0;
+  private throttleMs = 500;  // 节流间隔
+
+  constructor(readonly chatId: string, platformAdapter: PlatformAdapter) {
+    this.platformAdapter = platformAdapter;
+  }
+
+  async write(content: OutputContent): Promise<void> {
+    // 文本内容缓冲
+    if (content.type === 'text') {
+      this.buffer.push(content.text);
+      await this.tryFlush();
+      return;
+    }
+
+    // 工具调用立即发送
+    if (content.type === 'tool_use') {
+      await this.flush();
+      const toolText = `🔧 正在使用 ${content.metadata?.toolName || '工具'}...`;
+      await this.platformAdapter.sendMessage(this.chatId, toolText);
+      return;
+    }
+
+    // 完成时刷新
+    if (content.type === 'complete') {
+      await this.flush();
+      return;
+    }
+  }
+
+  async flush(): Promise<void> {
+    if (this.buffer.length === 0) return;
+
+    const text = this.buffer.join('');
+    this.buffer = [];
+
+    await this.platformAdapter.sendMessage(this.chatId, text);
+    this.lastSendTime = Date.now();
+  }
+
+  private async tryFlush(): Promise<void> {
+    if (Date.now() - this.lastSendTime >= this.throttleMs) {
+      await this.flush();
+    }
+  }
+}
+```
 
 ---
 
-## 四、Karma 实现设计
+## 六、Session 复合键
 
-### 4.1 目录结构
+```typescript
+// src/session/types.ts
+
+export interface SessionIdentity {
+  platform: Platform;
+  chatId: string;
+  userId?: string;
+}
+
+/**
+ * 会话复合键: "platform:chatId"
+ */
+export function getSessionKey(identity: SessionIdentity): string {
+  return `${identity.platform}:${identity.chatId}`;
+}
+```
+
+---
+
+## 七、FeishuAdapter 实现
+
+### 7.1 目录结构
 
 ```
 src/platform/
 ├── types.ts              # 接口定义
+├── router.ts             # 消息路由器
 ├── index.ts              # 导出
-├── adapter.ts            # 基类
-├── media-manager.ts      # 媒体管理
-├── message-formatter.ts  # 消息格式化
 │
-├── cli/
-│   ├── adapter.ts        # CLI 适配器
-│   ├── output.ts         # 输出处理
-│   └── input.ts          # 输入处理
-│
-├── feishu/
-│   ├── adapter.ts        # 飞书适配器
-│   ├── sender.ts         # 消息发送
-│   ├── receiver.ts       # 消息接收
-│   ├── card-builder.ts   # 卡片构建
-│   ├── file-handler.ts   # 文件处理
-│   └── client.ts         # API 客户端
-│
-├── discord/              # 未来
-│   └── adapter.ts
-│
-└── telegram/             # 未来
-    └── adapter.ts
+├── adapters/
+│   ├── cli.ts            # CLI 适配器
+│   └── feishu/
+│       ├── index.ts      # 飞书适配器
+│       ├── bot.ts        # WebSocket Bot
+│       ├── sender.ts     # 消息发送
+│       ├── receiver.ts   # 消息接收
+│       ├── card-builder.ts   # 卡片构建
+│       └── file-handler.ts   # 文件处理
 ```
 
-### 4.2 PlatformAdapter 基类
+### 7.2 FeishuAdapter
 
 ```typescript
-// src/platform/adapter.ts
-
-import type { PlatformAdapter, MessageContent, PlatformEvent } from './types.js';
-
-export abstract class BasePlatformAdapter implements PlatformAdapter {
-  abstract readonly platform: string;
-
-  // 子类必须实现
-  abstract sendMessage(chatId: string, content: MessageContent): Promise<void>;
-  abstract start(): Promise<void>;
-  abstract stop(): Promise<void>;
-  abstract isRunning(): boolean;
-
-  // 默认实现
-  async sendText(chatId: string, text: string): Promise<void> {
-    await this.sendMessage(chatId, { type: 'text', text });
-  }
-
-  async sendImage(chatId: string, image: Buffer | string, caption?: string): Promise<void> {
-    const content: MessageContent = {
-      type: 'image',
-      text: caption,
-      mediaData: typeof image === 'string' ? undefined : image,
-      mediaUrl: typeof image === 'string' ? image : undefined,
-    };
-    await this.sendMessage(chatId, content);
-  }
-
-  async sendFile(chatId: string, file: Buffer | string, fileName: string): Promise<void> {
-    const content: MessageContent = {
-      type: 'file',
-      fileName,
-      mediaData: typeof file === 'string' ? undefined : file,
-      mediaUrl: typeof file === 'string' ? file : undefined,
-    };
-    await this.sendMessage(chatId, content);
-  }
-
-  async sendAudio(chatId: string, audio: Buffer | string, duration?: number): Promise<void> {
-    const content: MessageContent = {
-      type: 'audio',
-      mediaData: typeof audio === 'string' ? undefined : audio,
-      mediaUrl: typeof audio === 'string' ? audio : undefined,
-      metadata: duration ? { duration } : undefined,
-    };
-    await this.sendMessage(chatId, content);
-  }
-
-  async sendBatch(chatId: string, contents: MessageContent[]): Promise<void> {
-    for (const content of contents) {
-      await this.sendMessage(chatId, content);
-    }
-  }
-
-  // 可选方法默认抛出
-  async deleteMessage(chatId: string, messageId: string): Promise<void> {
-    throw new Error('deleteMessage not supported');
-  }
-
-  async editMessage(chatId: string, messageId: string, content: MessageContent): Promise<void> {
-    throw new Error('editMessage not supported');
-  }
-}
-```
-
-### 4.3 CLI 适配器
-
-```typescript
-// src/platform/cli/adapter.ts
-
-import { BasePlatformAdapter } from '../adapter.js';
-import type { MessageContent } from '../types.js';
-import * as readline from 'readline';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-
-export class CLIAdapter extends BasePlatformAdapter {
-  readonly platform = 'cli';
-  private running = false;
-  private rl?: readline.Interface;
-  private onMessageCallback?: (event: any) => Promise<void>;
-
-  async start(): Promise<void> {
-    this.running = true;
-    this.rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-  }
-
-  async stop(): Promise<void> {
-    this.running = false;
-    this.rl?.close();
-  }
-
-  isRunning(): boolean {
-    return this.running;
-  }
-
-  onMessage(callback: (event: any) => Promise<void>): void {
-    this.onMessageCallback = callback;
-  }
-
-  async sendMessage(chatId: string, content: MessageContent): Promise<void> {
-    switch (content.type) {
-      case 'text':
-        process.stdout.write(content.text || '');
-        break;
-      case 'image':
-        console.log(`[图片: ${content.mediaUrl || 'buffer'}]`);
-        break;
-      case 'file':
-        console.log(`[文件: ${content.fileName}]`);
-        break;
-      case 'audio':
-        console.log(`[音频: ${content.metadata?.duration || 0}秒]`);
-        break;
-    }
-  }
-
-  async sendText(chatId: string, text: string): Promise<void> {
-    process.stdout.write(text);
-  }
-
-  async sendFile(chatId: string, file: Buffer | string, fileName: string): Promise<void> {
-    // CLI: 保存到临时目录
-    const tmpDir = path.join(os.tmpdir(), 'karma-files');
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-
-    const filePath = path.join(tmpDir, fileName);
-    if (Buffer.isBuffer(file)) {
-      fs.writeFileSync(filePath, file);
-    } else {
-      // 如果是 URL，提示
-      console.log(`[文件: ${fileName}]`);
-      return;
-    }
-
-    console.log(`[文件已保存: ${filePath}]`);
-  }
-}
-```
-
-### 4.4 飞书适配器
-
-```typescript
-// src/platform/feishu/adapter.ts
+// src/platform/adapters/feishu/bot.ts
 
 import * as lark from '@larksuiteoapi/node-sdk';
-import { BasePlatformAdapter } from '../adapter.js';
-import type { MessageContent, PlatformEvent } from '../types.js';
-import { FeishuSender } from './sender.js';
-import { FeishuFileHandler } from './file-handler.js';
-import type { KarmaConfig } from '@/config/loader.js';
+import type { PlatformAdapter, IncomingMessage, MessageHandler, MediaContent } from '../../types.js';
 
 export interface FeishuConfig {
   appId: string;
   appSecret: string;
-  enabled?: boolean;
 }
 
-export class FeishuAdapter extends BasePlatformAdapter {
-  readonly platform = 'feishu';
+export class FeishuAdapter implements PlatformAdapter {
+  readonly platform = 'feishu' as const;
 
-  private config: FeishuConfig;
-  private client?: lark.Client;
-  private sender?: FeishuSender;
-  private fileHandler?: FeishuFileHandler;
+  private client: lark.Client;
+  private wsClient?: lark.WSClient;
+  private messageHandlers: MessageHandler[] = [];
   private running = false;
 
-  constructor(config: FeishuConfig) {
-    super();
-    this.config = config;
-  }
-
-  async start(): Promise<void> {
-    if (!this.config.enabled) {
-      console.log('[Feishu] 适配器未启用');
-      return;
-    }
-
+  constructor(private config: FeishuConfig) {
     this.client = new lark.Client({
-      appId: this.config.appId,
-      appSecret: this.config.appSecret,
+      appId: config.appId,
+      appSecret: config.appSecret,
       appType: lark.AppType.SelfBuild,
       domain: lark.Domain.Lark,
     });
+  }
 
-    this.sender = new FeishuSender(this.client);
-    this.fileHandler = new FeishuFileHandler(this.client);
+  async start(): Promise<void> {
+    this.wsClient = new lark.WSClient({
+      appId: this.config.appId,
+      appSecret: this.config.appSecret,
+    });
+
+    const eventDispatcher = new lark.EventDispatcher({}).register({
+      'im.message.receive_v1': async (data: any) => {
+        await this.handleRawMessage(data);
+      },
+    });
+
+    await this.wsClient.start({ eventDispatcher });
     this.running = true;
 
-    console.log('[Feishu] 适配器已启动');
+    console.log('[Feishu] WebSocket 连接已建立');
   }
 
   async stop(): Promise<void> {
     this.running = false;
-    console.log('[Feishu] 适配器已停止');
   }
 
   isRunning(): boolean {
     return this.running;
   }
 
-  async sendMessage(chatId: string, content: MessageContent): Promise<void> {
-    if (!this.sender) throw new Error('Feishu adapter not started');
-
-    switch (content.type) {
-      case 'text':
-        await this.sender.sendText(chatId, content.text || '');
-        break;
-      case 'image':
-        await this.sender.sendImage(chatId, content.mediaData || content.mediaUrl || '');
-        break;
-      case 'file':
-        await this.sender.sendFile(chatId, content.mediaData || content.mediaUrl || '', content.fileName || 'file');
-        break;
-      case 'audio':
-        await this.sender.sendAudio(chatId, content.mediaData || content.mediaUrl || '');
-        break;
-      case 'card':
-        await this.sender.sendCard(chatId, content.metadata || {});
-        break;
-    }
+  onMessage(handler: MessageHandler): void {
+    this.messageHandlers.push(handler);
   }
 
-  async sendText(chatId: string, text: string): Promise<void> {
-    await this.sender?.sendText(chatId, text);
-  }
-
-  async sendImage(chatId: string, image: Buffer | string, caption?: string): Promise<void> {
-    await this.sender?.sendImage(chatId, image, caption);
-  }
-
-  async sendFile(chatId: string, file: Buffer | string, fileName: string): Promise<void> {
-    await this.sender?.sendFile(chatId, file, fileName);
-  }
-
-  async sendAudio(chatId: string, audio: Buffer | string, duration?: number): Promise<void> {
-    await this.sender?.sendAudio(chatId, audio);
-  }
-}
-```
-
-### 4.5 飞书消息发送器
-
-```typescript
-// src/platform/feishu/sender.ts
-
-import * as lark from '@larksuiteoapi/node-sdk';
-import { FeishuFileHandler } from './file-handler.js';
-import { buildTextContent } from './content-builder.js';
-
-export class FeishuSender {
-  private client: lark.Client;
-  private fileHandler: FeishuFileHandler;
-
-  constructor(client: lark.Client) {
-    this.client = client;
-    this.fileHandler = new FeishuFileHandler(client);
-  }
-
-  async sendText(chatId: string, text: string): Promise<void> {
-    await this.client.im.message.create({
+  async sendMessage(chatId: string, content: string): Promise<string> {
+    const response = await this.client.im.message.create({
       params: { receive_id_type: 'chat_id' },
       data: {
         receive_id: chatId,
         msg_type: 'text',
-        content: JSON.stringify({ text }),
+        content: JSON.stringify({ text: content }),
       },
     });
+
+    return response.data?.message_id || '';
   }
 
-  async sendImage(chatId: string, image: Buffer | string, caption?: string): Promise<void> {
-    let imageKey: string;
+  async sendImage(chatId: string, image: Buffer | string): Promise<string> {
+    // 上传图片并发送
+    const fileHandler = new FeishuFileHandler(this.client);
+    const imageKey = Buffer.isBuffer(image)
+      ? await fileHandler.uploadImage(image)
+      : await fileHandler.uploadImageFromUrl(image);
 
-    if (Buffer.isBuffer(image)) {
-      imageKey = await this.fileHandler.uploadImage(image);
-    } else {
-      // URL 方式
-      imageKey = await this.fileHandler.uploadImageFromUrl(image);
-    }
-
-    await this.client.im.message.create({
+    const response = await this.client.im.message.create({
       params: { receive_id_type: 'chat_id' },
       data: {
         receive_id: chatId,
@@ -514,22 +465,16 @@ export class FeishuSender {
       },
     });
 
-    // 如果有 caption，发送额外文本
-    if (caption) {
-      await this.sendText(chatId, caption);
-    }
+    return response.data?.message_id || '';
   }
 
-  async sendFile(chatId: string, file: Buffer | string, fileName: string): Promise<void> {
-    let fileKey: string;
+  async sendFile(chatId: string, file: Buffer | string, fileName: string): Promise<string> {
+    const fileHandler = new FeishuFileHandler(this.client);
+    const fileKey = Buffer.isBuffer(file)
+      ? await fileHandler.uploadFile(file, fileName)
+      : await fileHandler.uploadFileFromUrl(file, fileName);
 
-    if (Buffer.isBuffer(file)) {
-      fileKey = await this.fileHandler.uploadFile(file, fileName);
-    } else {
-      fileKey = await this.fileHandler.uploadFileFromUrl(file, fileName);
-    }
-
-    await this.client.im.message.create({
+    const response = await this.client.im.message.create({
       params: { receive_id_type: 'chat_id' },
       data: {
         receive_id: chatId,
@@ -537,53 +482,90 @@ export class FeishuSender {
         content: JSON.stringify({ file_key: fileKey }),
       },
     });
+
+    return response.data?.message_id || '';
   }
 
-  async sendAudio(chatId: string, audio: Buffer | string, duration?: number): Promise<void> {
-    // 飞书音频消息 (opus 格式)
-    let mediaKey: string;
+  async sendAudio(chatId: string, audio: Buffer | string): Promise<string> {
+    const fileHandler = new FeishuFileHandler(this.client);
+    const mediaKey = Buffer.isBuffer(audio)
+      ? await fileHandler.uploadMedia(audio, 'opus')
+      : await fileHandler.uploadMediaFromUrl(audio, 'opus');
 
-    if (Buffer.isBuffer(audio)) {
-      mediaKey = await this.fileHandler.uploadMedia(audio, 'opus');
-    } else {
-      mediaKey = await this.fileHandler.uploadMediaFromUrl(audio, 'opus');
-    }
-
-    await this.client.im.message.create({
+    const response = await this.client.im.message.create({
       params: { receive_id_type: 'chat_id' },
       data: {
         receive_id: chatId,
         msg_type: 'audio',
-        content: JSON.stringify({
-          file_key: mediaKey,
-          duration: duration || 0,
-        }),
+        content: JSON.stringify({ file_key: mediaKey }),
       },
     });
+
+    return response.data?.message_id || '';
   }
 
-  async sendCard(chatId: string, card: any): Promise<void> {
-    await this.client.im.message.create({
-      params: { receive_id_type: 'chat_id' },
-      data: {
-        receive_id: chatId,
-        msg_type: 'interactive',
-        content: JSON.stringify(card),
-      },
-    });
+  async downloadMedia(media: MediaContent): Promise<string> {
+    const fileHandler = new FeishuFileHandler(this.client);
+    return fileHandler.downloadFile(media.fileId);
+  }
+
+  private async handleRawMessage(data: any): Promise<void> {
+    const message = this.parseMessage(data);
+
+    for (const handler of this.messageHandlers) {
+      try {
+        await handler(message);
+      } catch (err) {
+        console.error('[Feishu] 消息处理错误:', err);
+      }
+    }
+  }
+
+  private parseMessage(data: any): IncomingMessage {
+    const { event } = data;
+    const { message, sender } = event;
+
+    return {
+      id: message.message_id,
+      platform: 'feishu',
+      chatId: message.chat_id,
+      userId: sender?.sender_id?.open_id,
+      senderType: sender?.sender_type === 'app' ? 'bot' : 'user',
+      text: this.extractText(message),
+      timestamp: Number(message.create_time) * 1000,
+    };
+  }
+
+  private extractText(message: any): string {
+    const content = JSON.parse(message.content || '{}');
+
+    if (message.message_type === 'text') {
+      return content.text || '';
+    }
+
+    if (message.message_type === 'post') {
+      return this.extractPostText(content);
+    }
+
+    return '';
+  }
+
+  private extractPostText(content: any): string {
+    return content.content.flat().map((c: any) => c.text || '').join('');
   }
 }
 ```
 
-### 4.6 飞书文件处理器
+### 7.3 FeishuFileHandler
 
 ```typescript
-// src/platform/feishu/file-handler.ts
+// src/platform/adapters/feishu/file-handler.ts
 
 import * as lark from '@larksuiteoapi/node-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import fetch from 'node-fetch';
 
 export class FeishuFileHandler {
@@ -593,9 +575,6 @@ export class FeishuFileHandler {
     this.client = client;
   }
 
-  /**
-   * 上传图片
-   */
   async uploadImage(imageBuffer: Buffer, fileName?: string): Promise<string> {
     const tmpPath = this.saveToTemp(imageBuffer, fileName || 'image.png');
 
@@ -606,24 +585,16 @@ export class FeishuFileHandler {
       },
     });
 
-    // 清理临时文件
     fs.unlinkSync(tmpPath);
-
     return response.data?.image_key || '';
   }
 
-  /**
-   * 从 URL 上传图片
-   */
   async uploadImageFromUrl(url: string): Promise<string> {
     const response = await fetch(url);
     const buffer = Buffer.from(await response.arrayBuffer());
     return this.uploadImage(buffer, path.basename(url));
   }
 
-  /**
-   * 上传文件
-   */
   async uploadFile(fileBuffer: Buffer, fileName: string): Promise<string> {
     const tmpPath = this.saveToTemp(fileBuffer, fileName);
 
@@ -632,28 +603,21 @@ export class FeishuFileHandler {
         file_name: fileName,
         file_size: fileBuffer.length,
         block_size: fileBuffer.length,
-        block_sha1: await this.calculateSha1(fileBuffer),
+        block_sha1: this.calculateSha1(fileBuffer),
       },
       file: fs.createReadStream(tmpPath),
     });
 
     fs.unlinkSync(tmpPath);
-
     return response.data?.file_token || '';
   }
 
-  /**
-   * 从 URL 上传文件
-   */
   async uploadFileFromUrl(url: string, fileName: string): Promise<string> {
     const response = await fetch(url);
     const buffer = Buffer.from(await response.arrayBuffer());
     return this.uploadFile(buffer, fileName);
   }
 
-  /**
-   * 上传媒体文件 (音频)
-   */
   async uploadMedia(mediaBuffer: Buffer, format: string): Promise<string> {
     const fileName = `media.${format}`;
     const tmpPath = this.saveToTemp(mediaBuffer, fileName);
@@ -667,30 +631,20 @@ export class FeishuFileHandler {
     });
 
     fs.unlinkSync(tmpPath);
-
     return response.data?.file_key || '';
   }
 
-  /**
-   * 从 URL 上传媒体
-   */
   async uploadMediaFromUrl(url: string, format: string): Promise<string> {
     const response = await fetch(url);
     const buffer = Buffer.from(await response.arrayBuffer());
     return this.uploadMedia(buffer, format);
   }
 
-  /**
-   * 下载文件
-   */
-  async downloadFile(fileKey: string): Promise<Buffer> {
+  async downloadFile(fileKey: string): Promise<string> {
     const response = await this.client.im.file.resources.get({
-      path: {
-        file_key: fileKey,
-      },
+      path: { file_key: fileKey },
     });
 
-    // 收集所有数据块
     const chunks: Buffer[] = [];
     for await (const chunk of response) {
       if (Buffer.isBuffer(chunk)) {
@@ -698,10 +652,14 @@ export class FeishuFileHandler {
       }
     }
 
-    return Buffer.concat(chunks);
+    const buffer = Buffer.concat(chunks);
+    const tmpPath = path.join(os.tmpdir(), 'karma-feishu', fileKey);
+    fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
+    fs.writeFileSync(tmpPath, buffer);
+
+    return tmpPath;
   }
 
-  // 辅助方法
   private saveToTemp(buffer: Buffer, fileName: string): string {
     const tmpDir = path.join(os.tmpdir(), 'karma-feishu');
     if (!fs.existsSync(tmpDir)) {
@@ -712,8 +670,7 @@ export class FeishuFileHandler {
     return tmpPath;
   }
 
-  private async calculateSha1(buffer: Buffer): Promise<string> {
-    const crypto = await import('crypto');
+  private calculateSha1(buffer: Buffer): string {
     return crypto.createHash('sha1').update(buffer).digest('hex');
   }
 }
@@ -721,70 +678,83 @@ export class FeishuFileHandler {
 
 ---
 
-## 五、平台集成
+## 八、主入口
 
-### 5.1 Platform Manager
+### 8.1 Bot 入口
 
 ```typescript
-// src/platform/manager.ts
+// src/bot-entry.ts
 
-import type { PlatformAdapter, PlatformConfig } from './types.js';
-import { CLIAdapter } from './cli/adapter.js';
-import { FeishuAdapter } from './feishu/adapter.js';
-import type { KarmaConfig } from '@/config/loader.js';
+import { StorageService } from './storage/index.js';
+import { SessionManager, getSessionKey } from './session/index.js';
+import { AgentRunner } from './agent/index.js';
+import { FeishuAdapter } from './platform/adapters/feishu/index.js';
+import { FeishuOutputAdapter } from './output/adapters/feishu.js';
+import { MessageRouter } from './platform/router.js';
+import { getConfig } from './config/index.js';
 
-export class PlatformManager {
-  private adapters: Map<string, PlatformAdapter> = new Map();
+async function main() {
+  const config = getConfig();
 
-  async initialize(config: KarmaConfig): Promise<void> {
-    // CLI (始终启用)
-    const cliAdapter = new CLIAdapter();
-    this.adapters.set('cli', cliAdapter);
-    await cliAdapter.start();
+  // 初始化核心组件
+  const storage = new StorageService(config.storage.path);
+  const sessionManager = new SessionManager(storage);
+  const runner = new AgentRunner({ /* ... */ });
 
-    // Feishu
-    if (config.platforms?.feishu?.enabled) {
-      const feishuAdapter = new FeishuAdapter({
-        appId: config.platforms.feishu.appId,
-        appSecret: config.platforms.feishu.appSecret,
-        enabled: true,
-      });
-      this.adapters.set('feishu', feishuAdapter);
-      await feishuAdapter.start();
+  // 消息路由器
+  const router = new MessageRouter();
+
+  // 飞书适配器
+  const feishu = new FeishuAdapter({
+    appId: config.platforms.feishu.appId,
+    appSecret: config.platforms.feishu.appSecret,
+  });
+
+  // 注册消息处理器
+  router.onMessage(async (message) => {
+    // 获取/创建会话（复合键）
+    const session = await sessionManager.getOrCreateSession({
+      platform: message.platform,
+      chatId: message.chatId,
+      userId: message.userId,
+    });
+
+    // 输出适配器（带节流）
+    const outputAdapter = new FeishuOutputAdapter(message.chatId, feishu);
+
+    try {
+      for await (const msg of runner.run({
+        userInput: message.text || '',
+        session,
+      })) {
+        await outputAdapter.write({
+          type: msg.type as any,
+          text: msg.content,
+        });
+      }
+    } catch (err) {
+      console.error('[Bot] Agent 错误:', err);
+      await feishu.sendMessage(message.chatId, '抱歉，处理出错了，请稍后重试。');
     }
+  });
 
-    // Discord (未来)
-    // if (config.platforms?.discord?.enabled) { ... }
+  // 启动
+  await feishu.start();
+  feishu.onMessage((msg) => router.route(msg));
 
-    // Telegram (未来)
-    // if (config.platforms?.telegram?.enabled) { ... }
-  }
-
-  getAdapter(platform: string): PlatformAdapter | undefined {
-    return this.adapters.get(platform);
-  }
-
-  getAllAdapters(): PlatformAdapter[] {
-    return Array.from(this.adapters.values());
-  }
-
-  async stopAll(): Promise<void> {
-    for (const adapter of this.adapters.values()) {
-      await adapter.stop();
-    }
-    this.adapters.clear();
-  }
+  console.log('[Bot] 服务已启动');
 }
+
+main().catch(console.error);
 ```
 
-### 5.2 配置扩展
+---
+
+## 九、配置扩展
 
 ```yaml
 # ~/.karma/config.yaml
 
-# ... 现有配置 ...
-
-# 平台配置
 platforms:
   cli:
     enabled: true
@@ -805,163 +775,29 @@ platforms:
 
 ---
 
-## 六、消息格式转换
+## 十、实施计划
 
-### 6.1 Markdown → 平台格式
-
-```typescript
-// src/platform/message-formatter.ts
-
-export interface MessageFormatter {
-  formatText(text: string): string;
-  formatMarkdown(md: string): any;
-  formatCode(code: string, lang?: string): any;
-}
-
-// 飞书格式化器
-export class FeishuMessageFormatter implements MessageFormatter {
-  formatText(text: string): string {
-    return text;
-  }
-
-  formatMarkdown(md: string): any {
-    // 飞书不支持 Markdown，转为纯文本或卡片
-    return { text: this.stripMarkdown(md) };
-  }
-
-  formatCode(code: string, lang?: string): any {
-    // 飞书代码块
-    return {
-      text: `\`\`\`${lang || ''}\n${code}\n\`\`\``,
-    };
-  }
-
-  private stripMarkdown(md: string): string {
-    return md
-      .replace(/#{1,6}\s/g, '')
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/`(.*?)`/g, '$1');
-  }
-}
-
-// Discord 格式化器
-export class DiscordMessageFormatter implements MessageFormatter {
-  formatText(text: string): string {
-    return text;
-  }
-
-  formatMarkdown(md: string): any {
-    // Discord 支持 Markdown
-    return { text: md };
-  }
-
-  formatCode(code: string, lang?: string): any {
-    return { text: `\`\`\`${lang || ''}\n${code}\n\`\`\`` };
-  }
-}
-```
+| 阶段 | 任务 | 工作量 |
+|------|------|--------|
+| 5.1 | PlatformAdapter 接口 + types.ts | 1h |
+| 5.2 | MessageRouter 实现 | 1h |
+| 5.3 | OutputAdapter + 节流 | 1.5h |
+| 5.4 | FeishuAdapter 核心 | 2h |
+| 5.5 | FeishuFileHandler | 1.5h |
+| 5.6 | Session 复合键改造 | 1h |
+| 5.7 | 测试 | 2h |
+| **总计** | | **10h** |
 
 ---
 
-## 七、测试策略
+## 十一、验收标准
 
-### 7.1 单元测试
-
-| 模块 | 测试重点 |
-|------|----------|
-| PlatformAdapter | 接口实现 |
-| FeishuSender | 消息发送 |
-| FeishuFileHandler | 文件上传下载 |
-| MessageFormatter | 格式转换 |
-
-### 7.2 集成测试
-
-| 场景 | 测试内容 |
-|------|----------|
-| CLI 启动 | REPL 循环 |
-| Feishu 连接 | WebSocket 连接 |
-| 消息收发 | 双向消息 |
-| 文件传输 | 上传下载 |
-
-### 7.3 E2E 测试
-
-- Agent-vs-Agent (已有)
-- Feishu Bot 测试 (新建)
-
----
-
-## 八、实施计划
-
-### Phase 5.1: 基础架构 (2h)
-
-- [ ] 创建 `src/platform/types.ts`
-- [ ] 创建 `src/platform/adapter.ts`
-- [ ] 重构 CLI 为 CLIAdapter
-- [ ] 更新 index.ts 使用 PlatformManager
-
-### Phase 5.2: 飞书适配器 (3h)
-
-- [ ] 创建 `src/platform/feishu/adapter.ts`
-- [ ] 创建 `src/platform/feishu/sender.ts`
-- [ ] 创建 `src/platform/feishu/file-handler.ts`
-- [ ] 实现 sendText, sendImage, sendFile, sendAudio
-
-### Phase 5.3: 消息处理 (2h)
-
-- [ ] 创建 `src/platform/feishu/receiver.ts`
-- [ ] 实现消息接收和事件转换
-- [ ] 实现命令解析
-
-### Phase 5.4: 测试 (2h)
-
-- [ ] FeishuAdapter 单元测试
-- [ ] FeishuSender 测试
-- [ ] FileHandler 测试
-- [ ] 集成测试
-
-### Phase 5.5: 文档 (1h)
-
-- [ ] 更新 README
-- [ ] 添加飞书配置指南
-- [ ] 添加 Discord/Telegram 扩展指南
-
----
-
-## 九、工作量估算
-
-| 阶段 | 工作量 |
-|------|--------|
-| Phase 5.1 | 2h |
-| Phase 5.2 | 3h |
-| Phase 5.3 | 2h |
-| Phase 5.4 | 2h |
-| Phase 5.5 | 1h |
-| **总计** | **10h** |
-
----
-
-## 十、依赖
-
-```json
-{
-  "dependencies": {
-    "@larksuiteoapi/node-sdk": "^1.0.0",
-    "node-fetch": "^3.0.0"
-  }
-}
-```
-
----
-
-## 十一、风险与缓解
-
-| 风险 | 缓解措施 |
-|------|----------|
-| 飞书 API 限制 | 实现速率限制 |
-| 文件大小限制 | 分片上传 |
-| WebSocket 断连 | 自动重连 |
-| 格式兼容性 | 降级处理 |
+- [ ] MessageRouter 去重生效
+- [ ] FeishuAdapter WebSocket 连接稳定
+- [ ] OutputAdapter 节流正常
+- [ ] 文本/图片/文件/语音全支持
+- [ ] 会话复合键正确
+- [ ] 20+ 测试通过
 
 ---
 
