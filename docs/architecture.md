@@ -1,587 +1,796 @@
-# Karma V3 架构设计
+# Karma-V3 架构设计
 
-> 模块化、可扩展的 AI 命理师 Agent 架构
+> 基于 Claude Agent SDK，融合 Alma 和 pi-mono 的优秀设计模式
+
+---
+
+## 实现状态 (2025-02-15)
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| Skills Loader | ✅ 完成 | loadSkills + formatSkillsForPrompt |
+| System Prompt Builder | ✅ 完成 | 7 parts (设计 9，合并 2 个) |
+| Client Profile | ✅ 完成 | SQLite 持久化 |
+| Session Manager | ✅ 完成 | 内存缓存 + SDK resume |
+| Config System | ✅ 完成 | YAML + 环境变量 |
+| MonologueFilter | ✅ 完成 | 流式过滤 |
+| Agent Runner | ✅ 完成 | SDK 集成 |
+| Prompts 模板系统 | ⏳ 未实现 | MVP 不需要 |
+| Persona Manager | ⏳ 简化 | 合并到 Prompt Parts |
+| Output Adapter | ⏳ 简化 | 只有 MonologueFilter |
+| Platform Adapters | ⏳ Phase 5 | 只有 CLI |
+
+---
+
+## 测试状态
+
+```
+Test Files  13 passed
+Tests       178 passed
+```
+
+---
+
+# Karma-V2 重构架构设计
+
+> 基于 Claude Agent SDK，融合 Alma 和 pi-mono 的优秀设计模式
 
 ---
 
 ## 一、设计目标
 
-### 1.1 核心目标
+### 1.1 核心原则
 
-- **模块化** - 各组件独立、可测试、可替换
-- **可扩展** - Skills 系统支持动态加载
-- **可维护** - 178 个测试保障质量
-- **平台无关** - 支持 CLI、Feishu、WeChat
+1. **可扩展性优先** - Skills/Prompts/工具可动态加载，无需改代码
+2. **持久化客户档案** - 记住每个客户的八字、历史、预测
+3. **多平台支持** - 统一 Agent 核心 + 平台适配器
+4. **简洁清晰** - 每个模块职责单一
 
-### 1.2 技术选型
+### 1.2 借鉴来源
 
-| 领域 | 技术 | 原因 |
-|------|------|------|
-| Runtime | Node.js 18+ | TypeScript 原生支持 |
-| AI SDK | @anthropic-ai/claude-agent-sdk | 官方支持 |
-| Database | SQLite + Drizzle ORM | 轻量、持久化 |
-| Config | YAML | 人类可读、环境变量支持 |
-| Test | Vitest | 快速、ESM 原生 |
+| 来源 | 借鉴内容 |
+|------|----------|
+| **Claude Agent SDK** | 核心 Agent 调用、会话管理、MCP 集成、Hooks |
+| **Alma** | SQLite 持久化、向量记忆、多 Provider、细粒度权限 |
+| **pi-mono** | Skills 索引注入、Prompt Templates、模块化 System Prompt |
 
 ---
 
-## 二、系统架构
+## 二、整体架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        CLI / Platform                        │
-│                    (src/index.ts)                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       Agent Runner                           │
-│                   (src/agent/runner.ts)                      │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  MonologueFilter - 过滤 inner_monologue             │    │
-│  │  SDK Integration - 调用 Claude Agent SDK            │    │
-│  │  Session Management - SDK session resume            │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│    Prompt    │    │   Session    │    │   Storage    │
-│    Builder   │    │   Manager    │    │   Service    │
-└──────────────┘    └──────────────┘    └──────────────┘
-       │                   │                   │
-       ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│    Parts     │    │ Memory Cache │    │   SQLite     │
-│  - persona   │    │              │    │              │
-│  - bazi      │    └──────────────┘    └──────────────┘
-│  - cold-read │
-│  - time      │    ┌──────────────┐
-│  - platform  │    │    Skills    │
-└──────────────┘    │   Loader     │
-                    └──────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │ SKILL.md     │
-                    │ - methodology│
-                    │ - psychology │
-                    │ - examples   │
-                    └──────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      Platform Adapters                          │
+│                 CLI │ Feishu │ WeChat (未来)                    │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────────┐
+│                      Karma Orchestrator                         │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐   │
+│  │  Session      │  │  Client       │  │  Persona          │   │
+│  │  Manager      │  │  Profile      │  │  Manager          │   │
+│  └───────────────┘  └───────────────┘  └───────────────────┘   │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐   │
+│  │  Skills       │  │  Prompts      │  │  Output           │   │
+│  │  Loader       │  │  Builder      │  │  Adapter          │   │
+│  └───────────────┘  └───────────────┘  └───────────────────┘   │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────────┐
+│                    Claude Agent SDK                             │
+│         query() + resume + mcpServers + hooks                   │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────────┐
+│                      Storage Layer                              │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐   │
+│  │  SQLite       │  │  Skills       │  │  Prompts          │   │
+│  │  (档案/会话)   │  │  (.md files)  │  │  (.md files)      │   │
+│  └───────────────┘  └───────────────┘  └───────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 三、核心模块
+## 三、核心模块设计
 
-### 3.1 Storage Layer
+### 3.1 Skills 系统 (参考 pi-mono)
 
-**职责**: 持久化存储
+**设计原则**: 文件系统驱动 + 索引注入到 System Prompt
 
-```typescript
-// src/storage/service.ts
-export class StorageService {
-  // 客户管理
-  createClient(data: ClientInput): Promise<string>
-  getClient(id: string): Promise<Client | null>
-  updateClient(id: string, data: Partial<ClientInput>): Promise<void>
+#### 3.1.1 文件结构
 
-  // 会话管理
-  createSession(data: SessionInput): Promise<string>
-  getSession(id: string): Promise<Session | null>
-  updateSdkSessionId(id: string, sdkSessionId: string): Promise<void>
-  endSession(id: string, summary?: string): Promise<void>
+```
+~/.karmav2/skills/                 # 全局 Skills
+├── cold-reading/
+│   └── SKILL.md
+├── bazi/
+│   └── SKILL.md
+├── psychology/
+│   └── SKILL.md
+└── reframe/
+    └── SKILL.md
 
-  // 事实追踪
-  addConfirmedFact(fact: FactInput): Promise<void>
-  getClientFacts(clientId: string): Promise<Fact[]>
-
-  // 预测管理
-  addPrediction(prediction: PredictionInput): Promise<void>
-  getClientPredictions(clientId: string): Promise<Prediction[]>
-
-  // 消息历史
-  addMessage(sessionId: string, role: string, content: string, rawContent?: string): Promise<void>
-  getSessionMessages(sessionId: string): Promise<Message[]>
-
-  // 客户档案生成
-  generateClientProfilePrompt(clientId: string): Promise<string>
-}
+{project}/.karma/skills/           # 项目 Skills (可选)
+├── local-custom/
+│   └── SKILL.md
 ```
 
-**Schema**:
-```typescript
-// src/storage/schema.ts
-export const clients = sqliteTable('clients', {
-  id: text('id').primaryKey(),
-  name: text('name'),
-  gender: text('gender'),
-  birthDate: text('birth_date'),
-  birthPlace: text('birth_place'),
-  currentCity: text('current_city'),
-  occupation: text('occupation'),
-  createdAt: integer('created_at'),
-  updatedAt: integer('updated_at'),
-});
+#### 3.1.2 SKILL.md 格式
 
-export const sessions = sqliteTable('sessions', {
-  id: text('id').primaryKey(),
-  clientId: text('client_id').references(() => clients.id),
-  platform: text('platform').notNull(),
-  externalChatId: text('external_chat_id'),
-  sdkSessionId: text('sdk_session_id'),
-  status: text('status').default('active'),
-  summary: text('summary'),
-  startedAt: integer('started_at'),
-  endedAt: integer('ended_at'),
-});
-```
-
-### 3.2 Skills System
-
-**职责**: 动态加载知识库
-
-```typescript
-// src/skills/loader.ts
-export async function loadSkills(options: {
-  globalDir?: string;
-  projectDir?: string;
-}): Promise<{
-  skills: Skill[];
-  errors: LoadError[];
-}>
-
-// src/skills/parser.ts
-export function parseSkillMarkdown(content: string): Skill | null
-
-// src/skills/formatter.ts
-export function formatSkillsForPrompt(skills: Skill[]): string
-```
-
-**SKILL.md 格式**:
 ```markdown
 ---
-name: skill-name
-description: 技能描述
+name: cold-reading
+description: 心理冷读技术 - 根据年龄阶段进行高命中率推断
 disable-model-invocation: false
 ---
 
-# 技能内容...
+# 心理冷读技能
+
+## 12 阶段断言速查表
+
+| 年龄段 | 阶段 | 核心关切 | 高命中断言 |
+|-------|------|---------|----------|
+| 15-18 | 高中生 | 学业 | ... |
+| 18-22 | 大学生 | 方向感 | ... |
+...
 ```
 
-### 3.3 Prompt Builder
+#### 3.1.3 Skills 加载器
 
-**职责**: 组合式 System Prompt
+```typescript
+// src/skills/loader.ts
+
+export interface Skill {
+  name: string;
+  description: string;
+  filePath: string;
+  content: string;
+  disableModelInvocation: boolean;
+}
+
+export function loadSkills(options: {
+  globalDir?: string;    // ~/.karmav2/skills/
+  projectDir?: string;   // {cwd}/.karma/skills/
+}): Skill[] {
+  // 扫描目录，解析 frontmatter，返回 Skills 列表
+}
+
+export function formatSkillsForPrompt(skills: Skill[]): string {
+  // 只注入索引，不注入内容
+  // 类似 pi-mono 的做法
+  return `
+The following skills provide specialized instructions.
+Use the Read tool to load a skill's file when needed.
+
+<available_skills>
+  <skill>
+    <name>cold-reading</name>
+    <description>心理冷读技术</description>
+    <location>/path/to/skills/cold-reading/SKILL.md</location>
+  </skill>
+</available_skills>
+`;
+}
+```
+
+### 3.2 Prompts 系统 (参考 pi-mono)
+
+**设计原则**: 模板 + 参数替换，用户可通过 `/template args` 触发
+
+#### 3.2.1 文件结构
+
+```
+~/.karmav2/prompts/               # 全局模板
+├── daily-fortune.md
+├── marriage.md
+└── career.md
+
+{project}/.karma/prompts/         # 项目模板
+└── custom.md
+```
+
+#### 3.2.2 模板格式
+
+```markdown
+---
+description: 每日运势简批
+---
+
+请为 $1 年 $2 月 $3 日出生的 $4 性客人分析今日运势。
+```
+
+#### 3.2.3 模板引擎
+
+```typescript
+// src/prompts/builder.ts
+
+export interface PromptTemplate {
+  name: string;
+  description: string;
+  content: string;
+  filePath: string;
+}
+
+export function expandTemplate(template: PromptTemplate, args: string[]): string {
+  // 支持 $1, $2, ... 位置参数
+  // 支持 $@ / $ARGUMENTS 所有参数
+  return template.content
+    .replace(/\$(\d+)/g, (_, n) => args[n - 1] || '')
+    .replace(/\$@/g, args.join(' '));
+}
+```
+
+### 3.3 System Prompt Builder (模块化)
+
+**设计原则**: 组合式构建，每个部分独立可配置
 
 ```typescript
 // src/prompt/builder.ts
-export async function buildSystemPrompt(
-  context: PromptContext,
-  options?: PromptOptions
-): Promise<string>
 
-export interface PromptContext {
+export interface SystemPromptContext {
   now: Date;
+  clientProfile?: ClientProfile;
   skills: Skill[];
   platform: 'cli' | 'feishu' | 'wechat';
-  clientId?: string;
+  personaConfig?: PersonaConfig;
 }
 
-export interface PromptOptions {
-  includeBazi?: boolean;
-  includeColdReading?: boolean;
-  includeOutputRules?: boolean;
-  includeToolGuidelines?: boolean;
-  persona?: PersonaConfig;
+export function buildSystemPrompt(context: SystemPromptContext): string {
+  const parts: string[] = [];
+
+  // 1. 时间锚点 (必须)
+  parts.push(buildTimeAnchor(context.now));
+
+  // 2. 人设 (可从 SOUL.md 加载)
+  parts.push(buildPersona(context.personaConfig));
+
+  // 3. 八字框架 (核心方法)
+  parts.push(buildBaziFramework());
+
+  // 4. 冷读引擎
+  parts.push(buildColdReadingEngine());
+
+  // 5. Skills 索引 (动态)
+  parts.push(formatSkillsForPrompt(context.skills));
+
+  // 6. 客户档案 (如果有)
+  if (context.clientProfile) {
+    parts.push(formatClientProfile(context.clientProfile));
+  }
+
+  // 7. 平台规则
+  parts.push(buildPlatformRules(context.platform));
+
+  // 8. 工具使用指南
+  parts.push(buildToolGuidelines());
+
+  // 9. 输出格式规则
+  parts.push(buildOutputRules());
+
+  return parts.join('\n\n');
 }
 ```
 
-**Prompt Parts**:
-```
-src/prompt/parts/
-├── persona.ts          # 人设
-├── bazi.ts             # 八字框架
-├── cold-reading.ts     # 冷读引擎
-├── time-anchor.ts      # 时间锚点
-├── platform-rules.ts   # 平台规则
-├── tool-guidelines.ts  # 工具使用指南
-└── output-rules.ts     # 输出格式规则
+### 3.4 客户档案系统 (参考 Alma)
+
+**设计原则**: SQLite 持久化，支持历史会话和预测追踪
+
+#### 3.4.1 数据库 Schema
+
+```typescript
+// src/storage/schema.ts
+
+// 客户档案
+export const clients = sqliteTable('clients', {
+  id: text('id').primaryKey(),
+
+  // 基本信息
+  name: text('name'),
+  gender: text('gender'),           // 'male' | 'female'
+  birthDate: text('birth_date'),    // 公历
+  birthDateLunar: text('birth_date_lunar'),
+  birthPlace: text('birth_place'),
+  currentCity: text('current_city'),
+
+  // 八字/命理信息
+  baziSummary: text('bazi_summary'),
+  zodiacWestern: text('zodiac_western'),
+  zodiacChinese: text('zodiac_chinese'),
+  personaArchetype: text('persona_archetype'),
+  coreElements: text('core_elements', { mode: 'json' }),
+
+  // 元数据
+  firstSeenAt: text('first_seen_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+  sessionCount: integer('session_count').default(1),
+});
+
+// 会话记录
+export const sessions = sqliteTable('sessions', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').references(() => clients.id),
+  sdkSessionId: text('sdk_session_id'),    // Claude SDK session_id
+
+  platform: text('platform'),              // 'cli' | 'feishu' | 'wechat'
+  externalChatId: text('external_chat_id'),
+
+  status: text('status').default('active'),
+  startedAt: text('started_at').notNull(),
+  endedAt: text('ended_at'),
+
+  summary: text('summary'),
+  keyPredictions: text('key_predictions', { mode: 'json' }),
+});
+
+// 确认/否认的事实
+export const confirmedFacts = sqliteTable('confirmed_facts', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').references(() => clients.id),
+  sessionId: text('session_id').references(() => sessions.id),
+
+  fact: text('fact').notNull(),
+  category: text('category'),    // 'career' | 'marriage' | 'health' | 'family'
+  confirmed: integer('confirmed', { mode: 'boolean' }),
+
+  originalPrediction: text('original_prediction'),
+  clientResponse: text('client_response'),
+  reframe: text('reframe'),      // 转义话术
+});
+
+// 预测记录
+export const predictions = sqliteTable('predictions', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').references(() => clients.id),
+  sessionId: text('session_id').references(() => sessions.id),
+
+  prediction: text('prediction').notNull(),
+  targetYear: integer('target_year'),
+  category: text('category'),
+  status: text('status').default('pending'), // 'pending' | 'confirmed' | 'denied' | 'expired'
+
+  createdAt: text('created_at').notNull(),
+  verifiedAt: text('verified_at'),
+});
+
+// 消息记录
+export const messages = sqliteTable('messages', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').references(() => sessions.id),
+
+  role: text('role').notNull(),    // 'user' | 'assistant'
+  content: text('content').notNull(),
+  rawContent: text('raw_content'),  // 包含 inner_monologue
+
+  toolCalls: text('tool_calls', { mode: 'json' }),
+  createdAt: text('created_at').notNull(),
+});
 ```
 
-### 3.4 Session Manager
+#### 3.4.2 Storage Service
 
-**职责**: 会话生命周期管理
+```typescript
+// src/storage/service.ts
+
+export class StorageService {
+  // 客户管理
+  async getOrCreateClient(birthInfo: BirthInfo): Promise<Client>;
+  async updateClient(id: string, data: Partial<Client>): Promise<void>;
+
+  // 会话管理
+  async createSession(clientId: string, platform: string): Promise<Session>;
+  async getSession(id: string): Promise<Session | null>;
+  async updateSdkSessionId(sessionId: string, sdkSessionId: string): Promise<void>;
+
+  // 档案管理
+  async addConfirmedFact(fact: ConfirmedFact): Promise<void>;
+  async getClientFacts(clientId: string): Promise<ConfirmedFact[]>;
+  async addPrediction(prediction: Prediction): Promise<void>;
+  async getClientPredictions(clientId: string): Promise<Prediction[]>;
+
+  // 生成 System Prompt 用的客户档案
+  async generateClientProfilePrompt(clientId: string): Promise<string>;
+}
+```
+
+### 3.5 Session Manager
+
+**设计原则**: 基于 SDK resume 能力，管理多平台会话
 
 ```typescript
 // src/session/manager.ts
+
 export class SessionManager {
-  private cache: Map<string, ActiveSession>;
+  private storage: StorageService;
+  private activeSessions: Map<string, ActiveSession>;
 
-  getOrCreateSession(input: SessionInput): Promise<ActiveSession>
-  updateSdkSessionId(id: string, sdkSessionId: string): Promise<void>
-  endSession(id: string, summary?: string): Promise<void>
-  clearCache(): void
-  getSessionFromCache(key: string): ActiveSession | undefined
+  async getOrCreateSession(context: {
+    platform: 'cli' | 'feishu' | 'wechat';
+    externalChatId?: string;
+    userInfo?: { name?: string; id?: string };
+  }): Promise<ActiveSession> {
+    // 1. 尝试从内存缓存获取
+    // 2. 尝试从数据库恢复
+    // 3. 创建新会话
+  }
+
+  async saveSession(session: ActiveSession): Promise<void> {
+    // 持久化 sdkSessionId 和状态
+  }
+}
+
+interface ActiveSession {
+  id: string;
+  clientId?: string;
+  sdkSessionId?: string;
+  platform: string;
+  externalChatId?: string;
+  startedAt: Date;
 }
 ```
 
-**内存缓存 + 持久化**:
-- 活跃会话缓存在内存
-- SDK session_id 持久化到 SQLite
-- 程序重启后恢复会话
+### 3.6 Output Adapter (平台适配)
 
-### 3.5 Agent Runner
-
-**职责**: 封装 SDK 调用
+**设计原则**: 统一的消息处理 + 平台特定输出
 
 ```typescript
-// src/agent/runner.ts
-export class AgentRunner {
-  constructor(config: AgentRunnerConfig);
+// src/output/adapter.ts
 
-  async *run(options: RunOptions): AsyncGenerator<ProcessedMessage>
-  async *runText(options: RunOptions): AsyncGenerator<string>
+export interface OutputMessage {
+  type: 'text' | 'tool_use' | 'tool_result' | 'status' | 'error';
+  content: string;
+  metadata?: Record<string, unknown>;
 }
 
-export interface AgentRunnerConfig {
-  storage: StorageService;
-  sessionManager: SessionManager;
-  skills: Skill[];
-  model: string;
-  baseUrl?: string;
-  authToken?: string;
+export interface OutputAdapter {
+  send(message: OutputMessage): Promise<void>;
+  sendBatch(messages: OutputMessage[]): Promise<void>;
 }
-```
 
-**SDK 集成**:
-```typescript
-const q = query({
-  prompt: userInput,
-  options: {
-    model,
-    systemPrompt,
-    resume: session.sdkSessionId,
-    permissionMode: 'bypassPermissions',
-    env: {
-      ANTHROPIC_AUTH_TOKEN: authToken,
-      ANTHROPIC_BASE_URL: baseUrl,
-    },
-  },
-});
+// CLI 适配器
+export class CLIOutputAdapter implements OutputAdapter {
+  send(msg: OutputMessage): Promise<void> {
+    // 直接 console.log，支持 ANSI 颜色
+  }
+}
 
-for await (const msg of q) {
-  if (msg.type === 'assistant') {
-    // 过滤 monologue
-    const filtered = filter.process(block.text);
-    yield filtered;
+// Feishu 适配器
+export class FeishuOutputAdapter implements OutputAdapter {
+  private chatId: string;
+  private sender: FeishuSender;
+
+  send(msg: OutputMessage): Promise<void> {
+    // 1. 过滤 inner_monologue (已在 SDK 层处理)
+    // 2. 转换 Markdown 为 Feishu 卡片
+    // 3. 节流发送
   }
 }
 ```
 
-### 3.6 Monologue Filter
-
-**职责**: 过滤 inner_monologue
-
-```typescript
-// src/agent/monologue-filter.ts
-export class MonologueFilter {
-  process(text: string): string
-  flush(): string
-  reset(): void
-}
-```
-
-**特性**:
-- 流式处理（跨 chunk）
-- 处理被截断的 monologue
-- 状态管理
-
 ---
 
-## 四、数据流
+## 四、配置系统
 
-### 4.1 完整对话流程
-
-```
-用户输入
-    │
-    ▼
-┌─────────────────┐
-│   CLI / API     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ SessionManager  │ ──── 获取/创建会话
-│ getOrCreate()   │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ PromptBuilder   │ ──── 构建 System Prompt
-│ build()         │     - 时间锚点
-└────────┬────────┘     - Skills 索引
-         │              - 平台规则
-         ▼
-┌─────────────────┐
-│  AgentRunner    │ ──── 调用 SDK
-│  run()          │     - resume 支持
-└────────┬────────┘     - 流式输出
-         │
-         ▼
-┌─────────────────┐
-│ MonologueFilter │ ──── 过滤 inner_monologue
-│ process()       │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ SessionManager  │ ──── 更新 SDK session_id
-│ updateSdkId()   │
-└────────┬────────┘
-         │
-         ▼
-       输出
-```
-
-### 4.2 客户档案生成
+### 4.1 配置文件
 
 ```
-getClient(clientId)
-        │
-        ▼
-┌─────────────────────┐
-│ StorageService      │
-│ generateProfile()   │
-└─────────┬───────────┘
-          │
-          ├──── 基本信息
-          ├──── 已确认事实
-          ├──── 已否认事实
-          └──── 已做出的预测
-          │
-          ▼
-    格式化 Prompt
-          │
-          ▼
-    注入 System Prompt
+~/.karmav2/
+├── config.yaml           # 主配置
+├── SOUL.md               # 人设配置 (参考 pi-mono)
+├── skills/               # 全局 Skills
+│   └── */SKILL.md
+└── prompts/              # 全局 Prompt 模板
+    └── *.md
+
+{project}/.karma/
+├── config.yaml           # 项目配置
+├── AGENTS.md             # 项目上下文
+├── skills/               # 项目 Skills
+└── prompts/              # 项目 Prompts
 ```
 
----
-
-## 五、配置系统
-
-### 5.1 配置文件
+### 4.2 配置格式
 
 ```yaml
-# ~/.karma/config.yaml
+# ~/.karmav2/config.yaml
 
+# AI 配置
 ai:
-  authToken: ${ANTHROPIC_AUTH_TOKEN:}
-  baseUrl: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-  model: ${ANTHROPIC_MODEL:claude-sonnet-4-5-20250929}
-  timeout: 300000
+  provider: anthropic     # anthropic | glm | openai
+  model: claude-sonnet-4-5-20250929
 
+# 存储配置
 storage:
   type: sqlite
-  path: ~/.karma/karma.db
+  path: ~/.karmav2/karma.db
 
+# Skills 配置
 skills:
   dirs:
-    - ~/.karma/skills
-    - ./skills
+    - ~/.karmav2/skills
   autoLoad: true
 
+# 人设配置
+persona:
+  path: ~/.karmav2/SOUL.md
+
+# 平台配置
+platforms:
+  cli:
+    enabled: true
+  feishu:
+    enabled: true
+    appId: ${FEISHU_APP_ID}
+    appSecret: ${FEISHU_APP_SECRET}
+
+# 日志配置
 logging:
+  dir: ~/.karmav2/logs
   level: info
-  file: ~/.karma/logs/karma.log
+  includeMonologue: true   # 记录 inner_monologue
 ```
 
-### 5.2 环境变量优先
+### 4.3 SOUL.md 人设配置
 
-```typescript
-// src/config/loader.ts
-export function loadConfig(): KarmaConfig {
-  let config = { ...DEFAULT_CONFIG };
-
-  // 加载文件
-  if (existsSync(configPath)) {
-    config = deepMerge(config, parse(yamlContent));
-  }
-
-  // 环境变量覆盖
-  if (process.env.ANTHROPIC_AUTH_TOKEN) {
-    config.ai.authToken = process.env.ANTHROPIC_AUTH_TOKEN;
-  }
-
-  return config;
-}
-```
-
+```markdown
+---
+name: 师傅
+title: 命理师
+experience: 三十年
 ---
 
-## 六、测试策略
+# 你的身份
 
-### 6.1 测试金字塔
+你是一位有三十年经验的命理师，精通八字...
 
-```
-        ┌───────┐
-        │  E2E  │ 16 tests
-        │       │
-      ┌─┴───────┴─┐
-      │ Integration│ 7 tests
-      │           │
-    ┌─┴───────────┴─┐
-    │    Unit       │ 155 tests
-    │               │
-    └───────────────┘
-```
-
-### 6.2 测试覆盖
-
-| 模块 | 测试数 | 覆盖率 |
-|------|--------|--------|
-| Storage | 31 | 95%+ |
-| Skills | 39 | 95%+ |
-| Prompt | 32 | 95%+ |
-| Session | 20 | 95%+ |
-| Agent | 33 | 95%+ |
-| E2E | 16 | - |
-| Integration | 7 | - |
-
-### 6.3 Agent-vs-Agent 测试
-
-```typescript
-// tests/e2e/agent-test.ts
-
-// 模拟真实用户人设
-const LI_TING: Persona = {
-  name: '李婷',
-  gender: 'female',
-  birthDate: '1997年农历三月初八 早上6点多',
-  concerns: ['婚恋', '家庭压力'],
-};
-
-// 自动化多轮对话测试
-const runner = new AgentTestRunner(persona, 5);
-runner.run();
-```
-
----
-
-## 七、扩展点
-
-### 7.1 添加新平台
-
-```typescript
-// src/platform/feishu.ts
-export class FeishuAdapter implements PlatformAdapter {
-  async handleMessage(event: FeishuEvent): Promise<void> {
-    const session = await sessionManager.getOrCreateSession({
-      platform: 'feishu',
-      externalChatId: event.chat_id,
-    });
-
-    for await (const text of runner.runText({
-      userInput: event.message,
-      session,
-    })) {
-      await this.sendText(event.chat_id, text);
-    }
-  }
-}
-```
-
-### 7.2 添加新 Skill
-
-```bash
-mkdir -p skills/my-skill
-cat > skills/my-skill/SKILL.md << 'EOF'
----
-name: my-skill
-description: 我的技能
----
-
-# 技能内容...
-EOF
-```
-
-### 7.3 自定义 Prompt Part
-
-```typescript
-// src/prompt/parts/custom.ts
-export function buildCustomPart(): string {
-  return `
-# 自定义部分
-
+## 性格与语气
+- 像朋友聊天，不端着
+- 多段短消息节奏
 ...
-`;
-}
-
-// src/prompt/builder.ts
-import { buildCustomPart } from './parts/custom.js';
-
-// 在 buildSystemPrompt 中添加
-parts.push(buildCustomPart());
 ```
 
 ---
 
-## 八、性能考量
+## 五、SDK 集成
 
-### 8.1 内存缓存
+### 5.1 核心 Query 封装
 
-- SessionManager 使用 Map 缓存活跃会话
-- 避免频繁数据库查询
-- 程序退出时持久化
+```typescript
+// src/agent/client.ts
 
-### 8.2 流式输出
+import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 
-- SDK 返回 AsyncGenerator
-- 逐 token/chunk 输出
-- 用户体验更好
+export interface KarmaQueryOptions {
+  userMessage: string;
+  session: ActiveSession;
+  clientProfile?: ClientProfile;
+  skills: Skill[];
+  platform: 'cli' | 'feishu' | 'wechat';
+}
 
-### 8.3 SQLite
+export async function* karmaQuery(
+  options: KarmaQueryOptions
+): AsyncGenerator<SDKMessage> {
+  const { userMessage, session, clientProfile, skills, platform } = options;
 
-- 单文件数据库
-- 读写快速
-- 无需额外服务
+  // 构建 System Prompt
+  const systemPrompt = buildSystemPrompt({
+    now: new Date(),
+    clientProfile,
+    skills,
+    platform,
+  });
+
+  // 配置 MCP 服务器
+  const mcpServers = {
+    'feishu-tools': createFeishuMcpServer(session.externalChatId),
+  };
+
+  // 调用 SDK
+  const q = query({
+    prompt: userMessage,
+    options: {
+      cwd: Config.getWorkspaceDir(),
+      model: Config.getModel(),
+      permissionMode: 'bypassPermissions',
+      allowDangerouslySkipPermissions: true,
+
+      systemPrompt,
+      resume: session.sdkSessionId,
+      mcpServers,
+
+      // 加载项目设置 (Skills)
+      settingSources: ['project'],
+
+      // 环境变量
+      env: {
+        ...process.env,
+        ANTHROPIC_API_KEY: Config.getApiKey(),
+      },
+    },
+  });
+
+  // 流式返回
+  for await (const msg of q) {
+    // 捕获 session_id
+    if ('session_id' in msg && msg.session_id) {
+      session.sdkSessionId = msg.session_id;
+    }
+
+    yield msg;
+  }
+}
+```
+
+### 5.2 MCP 工具
+
+```typescript
+// src/mcp/feishu-tools.ts
+
+import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
+
+export function createFeishuMcpServer(chatId: string) {
+  return createSdkMcpServer({
+    name: 'feishu-tools',
+    version: '1.0.0',
+    tools: [
+      tool(
+        'send_user_feedback',
+        'Send a message to the user in Feishu',
+        {
+          content: z.string().describe('Message content'),
+          format: z.enum(['text', 'markdown']).optional(),
+        },
+        async (args) => {
+          await feishuSender.send(chatId, args.content, args.format);
+          return { content: [{ type: 'text', text: 'Message sent' }] };
+        }
+      ),
+
+      tool(
+        'send_file_to_feishu',
+        'Send a file to the user in Feishu',
+        {
+          filePath: z.string().describe('Path to the file'),
+        },
+        async (args) => {
+          await feishuFileSender.send(chatId, args.filePath);
+          return { content: [{ type: 'text', text: 'File sent' }] };
+        }
+      ),
+    ],
+  });
+}
+```
 
 ---
 
-## 九、安全考量
+## 六、目录结构
 
-### 9.1 敏感信息
-
-- Auth Token 通过环境变量传入
-- 不写入配置文件
-- .gitignore 排除 .env
-
-### 9.2 输出过滤
-
-- MonologueFilter 确保内部思考不泄露
-- 用户只看到最终输出
+```
+karma-v2/
+├── src/
+│   ├── index.ts              # CLI 入口
+│   ├── config/
+│   │   ├── index.ts          # 配置加载
+│   │   └── types.ts
+│   ├── storage/
+│   │   ├── schema.ts         # Drizzle schema
+│   │   ├── service.ts        # Storage service
+│   │   └── migrations.ts
+│   ├── skills/
+│   │   ├── loader.ts         # Skills 加载器
+│   │   └── types.ts
+│   ├── prompts/
+│   │   ├── builder.ts        # System Prompt 构建
+│   │   ├── templates.ts      # 模板加载
+│   │   └── parts/            # Prompt 各部分
+│   │       ├── persona.ts
+│   │       ├── bazi.ts
+│   │       ├── cold-reading.ts
+│   │       └── ...
+│   ├── session/
+│   │   └── manager.ts
+│   ├── agent/
+│   │   ├── client.ts         # SDK 封装
+│   │   └── monologue-filter.ts
+│   ├── output/
+│   │   ├── adapter.ts        # 接口
+│   │   ├── cli.ts            # CLI 适配器
+│   │   └── feishu.ts         # Feishu 适配器
+│   ├── mcp/
+│   │   └── feishu-tools.ts
+│   └── adapters/
+│       ├── cli.ts            # CLI 平台适配
+│       └── feishu.ts         # Feishu 平台适配
+├── data/
+│   └── karma.db              # SQLite 数据库
+├── ~/.karmav2/
+│   ├── config.yaml
+│   ├── SOUL.md
+│   ├── skills/
+│   ├── prompts/
+│   └── logs/
+├── package.json
+└── tsconfig.json
+```
 
 ---
 
-## 十、未来演进
+## 七、实施计划
 
-### 10.1 Phase 5: Platform Adapters
+### Phase 1: 存储层 (2-3 天)
 
-- Feishu 适配器
-- WeChat 适配器
-- 输出格式转换
+- [ ] 添加 better-sqlite3 + drizzle-orm
+- [ ] 实现 schema (clients, sessions, messages, facts, predictions)
+- [ ] 实现 StorageService
+- [ ] 数据库迁移
 
-### 10.2 Phase 6: 配置系统完善
+### Phase 2: Skills 系统 (2 天)
 
-- 项目级配置
-- 人设热加载
-- 日志系统
+- [ ] 实现 Skills 加载器 (参考 pi-mono)
+- [ ] 实现 formatSkillsForPrompt
+- [ ] 迁移现有 prompt 中的冷读库到 Skills
 
-### 10.3 功能增强
+### Phase 3: System Prompt 模块化 (1-2 天)
 
-- 客户档案自动生成
-- 预测验证追踪
-- 多语言支持
-- Web UI
+- [ ] 拆分 prompt.ts 为多个模块
+- [ ] 实现 buildSystemPrompt
+- [ ] 支持 SOUL.md 人设配置
+
+### Phase 4: 会话管理 (1-2 天)
+
+- [ ] 实现 SessionManager
+- [ ] 集成 SDK resume
+
+### Phase 5: 平台适配器 (2-3 天)
+
+- [ ] 重构 CLI 适配器
+- [ ] 实现 Feishu 适配器
+- [ ] 实现 Output Adapter
+
+### Phase 6: 配置系统 (1 天)
+
+- [ ] 实现 config.yaml 加载
+- [ ] 支持环境变量
+
+---
+
+## 八、与现有实现对比
+
+| 方面 | Karma-V2 (现有) | Karma-V2 (新) |
+|------|----------------|---------------|
+| **Prompt** | 714 行大函数 | 模块化 + Skills + Templates |
+| **状态存储** | `/tmp/karma_state.json` | SQLite 持久化 |
+| **客户档案** | 临时 | 完整档案 + 预测追踪 |
+| **平台支持** | CLI only | CLI + Feishu |
+| **Skills** | 无 | 文件系统 + 索引注入 |
+| **人设** | 硬编码 | SOUL.md 可配置 |
+| **会话** | SDK 内部管理 | 显式 Session Manager |
+
+---
+
+## 九、风险与缓解
+
+| 风险 | 缓解措施 |
+|------|----------|
+| 迁移复杂度高 | 分阶段实施，保持向后兼容 |
+| 性能问题 | Skills 索引缓存 + 懒加载 |
+| 多平台一致性 | 统一 Output Adapter 接口 |
+| 配置复杂 | 合理默认值 + 渐进式配置 |
+
+---
+
+## 十、总结
+
+本架构融合了三个优秀项目的精华：
+
+1. **Claude Agent SDK** - 提供稳定的 Agent 运行时
+2. **Alma** - SQLite 持久化、客户档案、多 Provider
+3. **pi-mono** - Skills 索引、Prompt Templates、模块化
+
+核心改进：
+- 从硬编码 → **可配置 Skills + Templates**
+- 从临时文件 → **SQLite 持久化档案**
+- 从单一 CLI → **多平台适配器**
+- 从单一入口 → **统一 Orchestrator + 平台适配器**
