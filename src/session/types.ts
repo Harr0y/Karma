@@ -1,6 +1,6 @@
 // Session Manager Types
 
-export type Platform = 'cli' | 'feishu' | 'wechat';
+export type Platform = 'cli' | 'feishu' | 'discord' | 'telegram';
 
 export interface ActiveSession {
   id: string;
@@ -9,6 +9,22 @@ export interface ActiveSession {
   platform: Platform;
   externalChatId?: string;
   startedAt: Date;
+}
+
+/**
+ * 会话身份标识（用于复合键）
+ */
+export interface SessionIdentity {
+  platform: Platform;
+  chatId: string;
+  userId?: string;
+}
+
+/**
+ * 会话复合键: "platform:chatId"
+ */
+export function getSessionKey(identity: SessionIdentity): string {
+  return `${identity.platform}:${identity.chatId}`;
 }
 
 export interface GetOrCreateSessionContext {
