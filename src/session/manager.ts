@@ -1,7 +1,12 @@
 // Session Manager - 管理多平台会话
 
 import type { StorageService } from '@/storage/service.js';
-import type { ActiveSession, GetOrCreateSessionContext, Platform } from './types.js';
+import type { ActiveSession, GetOrCreateSessionContext, Platform, SessionIdentity } from './types.js';
+import { getSessionKey } from './types.js';
+
+// Re-export for convenience
+export { getSessionKey } from './types.js';
+export type { SessionIdentity } from './types.js';
 
 export class SessionManager {
   private storage: StorageService;
@@ -15,13 +20,10 @@ export class SessionManager {
   }
 
   /**
-   * 生成缓存键
+   * 生成缓存键（使用 SessionIdentity 复合键）
    */
   private getCacheKey(platform: Platform, externalChatId?: string): string {
-    if (externalChatId) {
-      return `${platform}:${externalChatId}`;
-    }
-    return platform;
+    return getSessionKey({ platform, chatId: externalChatId || platform });
   }
 
   /**
@@ -72,6 +74,7 @@ export class SessionManager {
     }
 
     // 2. 尝试从数据库恢复 (仅 Feishu 等有 externalChatId 的平台)
+    // 使用复合键查询：platform:chatId
     if (externalChatId) {
       const dbSession = await this.storage.getSessionByExternalChatId(platform, externalChatId);
       if (dbSession && dbSession.status === 'active') {
@@ -83,6 +86,7 @@ export class SessionManager {
           externalChatId: dbSession.externalChatId ?? undefined,
           startedAt: new Date(dbSession.startedAt),
         };
+        // 使用复合键缓存
         this.activeSessions.set(cacheKey, activeSession);
         return activeSession;
       }
@@ -103,6 +107,7 @@ export class SessionManager {
       startedAt: new Date(),
     };
 
+    // 使用复合键缓存
     this.activeSessions.set(cacheKey, newSession);
     return newSession;
   }

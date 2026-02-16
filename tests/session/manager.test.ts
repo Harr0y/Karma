@@ -119,7 +119,7 @@ describe('SessionManager', () => {
 
       await manager.updateSdkSessionId(session.id, 'sdk_abc123');
 
-      const cached = manager.getSessionFromCache('cli');
+      const cached = manager.getSessionFromCache('cli:cli');
       expect(cached?.sdkSessionId).toBe('sdk_abc123');
     });
 
@@ -158,7 +158,7 @@ describe('SessionManager', () => {
 
       await manager.linkClient(session.id, clientId);
 
-      const cached = manager.getSessionFromCache('cli');
+      const cached = manager.getSessionFromCache('cli:cli');
       expect(cached?.clientId).toBe(clientId);
     });
   });
