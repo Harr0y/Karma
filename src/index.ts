@@ -9,39 +9,62 @@ import { loadSkills } from './skills/index.js';
 import { SessionManager } from './session/index.js';
 import { AgentRunner } from './agent/index.js';
 import { getConfig } from './config/index.js';
+import { getLogger, setLogger, createLogger } from './logger/index.js';
 
 // 首次启动提示
 const GREETING_PROMPT = '一位新的客人到来了。请按照你的方法论开始接待。简单直接地向客人打招呼，请他们把生辰时间、性别和出生地发给你。不要搞仪式感，像真师傅一样随意自然。';
 
 async function main() {
+  // CLI 欢迎信息（保留，这是用户可见的输出）
   console.log('\n  \x1b[33m✦ Karma 命理师 ✦\x1b[0m\n');
-  console.log('[Main] 开始初始化...');
+
+  // 初始化 Logger
+  const logger = createLogger({
+    program: {
+      level: 'debug',
+      outputs: [{ type: 'console', colorize: true }],
+    },
+  });
+  setLogger(logger);
+
+  const mainLogger = logger.child({ module: 'system' });
+  const getDuration = mainLogger.startTimer('startup');
+
+  mainLogger.info('开始初始化', { operation: 'startup' });
 
   // 加载配置
-  console.log('[Main] 加载配置...');
   const config = getConfig();
+  mainLogger.debug('配置加载完成', {
+    operation: 'config_load',
+    metadata: {
+      model: config.ai.model,
+      baseUrl: config.ai.baseUrl,
+      hasAuthToken: !!config.ai.authToken,
+    },
+  });
+
+  // 显示配置信息（CLI 用户可见）
   console.log(`模型: ${config.ai.model}`);
   console.log(`API: ${config.ai.baseUrl}`);
-  console.log(`authToken: ${config.ai.authToken ? config.ai.authToken.substring(0, 10) + '...' : '(未设置)'}`);
   console.log();
 
   // 确保目录存在
   const dbDir = dirname(config.storage.path);
   if (!existsSync(dbDir)) {
-    console.log('[Main] 创建数据库目录:', dbDir);
+    mainLogger.debug('创建数据库目录', { operation: 'mkdir', metadata: { path: dbDir } });
     mkdirSync(dbDir, { recursive: true });
   }
 
   // 1. 初始化组件
-  console.log('[Main] 初始化 Storage...');
+  mainLogger.debug('初始化 Storage', { operation: 'storage_init' });
   const storage = new StorageService(config.storage.path);
-  console.log('[Main] 初始化 SessionManager...');
+
+  mainLogger.debug('初始化 SessionManager', { operation: 'session_init' });
   const sessionManager = new SessionManager(storage);
 
   // 2. 加载 Skills
-  console.log('[Main] 加载 Skills...');
+  mainLogger.debug('加载 Skills', { operation: 'skills_load' });
   const skillDirs = config.skills.dirs.filter(existsSync);
-  console.log('[Main] Skills 目录:', skillDirs);
 
   const { skills, errors } = await loadSkills({
     globalDir: skillDirs[0],
@@ -52,15 +75,23 @@ async function main() {
     console.log('\x1b[33mSkills 加载警告:\x1b[0m');
     for (const err of errors) {
       console.log(`  - ${err.filePath}: ${err.error}`);
+      mainLogger.warn('Skill 加载失败', {
+        operation: 'skill_error',
+        metadata: { path: err.filePath, error: err.error },
+      });
     }
     console.log();
   }
 
+  mainLogger.info('Skills 加载完成', {
+    operation: 'skills_loaded',
+    metadata: { count: skills.length, names: skills.map(s => s.name) },
+  });
   console.log(`已加载 ${skills.length} 个 Skills:`, skills.map(s => s.name).join(', '));
   console.log();
 
   // 3. 创建 Runner
-  console.log('[Main] 创建 AgentRunner...');
+  mainLogger.debug('创建 AgentRunner', { operation: 'runner_init' });
   const runner = new AgentRunner({
     storage,
     sessionManager,
@@ -71,16 +102,20 @@ async function main() {
   });
 
   // 4. 获取/创建会话
-  console.log('[Main] 获取/创建会话...');
+  mainLogger.debug('获取/创建会话', { operation: 'session_get' });
   const session = await sessionManager.getOrCreateSession({
     platform: 'cli',
   });
-  console.log('[Main] 会话 ID:', session.id);
-  console.log('[Main] SDK 会话 ID:', session.sdkSessionId || '(无)');
+
+  mainLogger.info('会话就绪', {
+    operation: 'session_ready',
+    sessionId: session.id,
+    metadata: { hasSdkSession: !!session.sdkSessionId },
+  });
 
   // 5. 首次启动 - Agent 主动开场
   if (!session.sdkSessionId) {
-    console.log('[Main] 首次启动，Agent 主动开场...');
+    mainLogger.info('首次启动，Agent 主动开场', { operation: 'greeting' });
     console.log('\x1b[36m师傅:\x1b[0m');
 
     try {
@@ -91,17 +126,16 @@ async function main() {
         process.stdout.write(text);
       }
       console.log('\n');
-      console.log('[Main] Agent 响应完成');
+      mainLogger.debug('Agent 响应完成', { operation: 'greeting_complete' });
     } catch (err: any) {
-      console.error('\n[Main] Agent 响应出错:', err.message);
-      console.error('[Main] 堆栈:', err.stack);
+      mainLogger.error('Agent 响应出错', err, { operation: 'greeting_error' });
     }
   } else {
     console.log('已恢复之前的会话\n');
   }
 
   // 6. REPL 循环
-  console.log('[Main] 进入 REPL 循环...');
+  mainLogger.debug('进入 REPL 循环', { operation: 'repl_start' });
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -124,6 +158,7 @@ async function main() {
     // 退出
     if (userInput.trim().toLowerCase() === 'exit' || userInput.trim() === '退出') {
       console.log('\n  \x1b[33m✦ 师傅已退出 ✦\x1b[0m\n');
+      mainLogger.info('用户退出', { operation: 'exit' });
       break;
     }
 
@@ -140,6 +175,7 @@ async function main() {
       }
       console.log('\n');
     } catch (err: any) {
+      mainLogger.error('Agent 运行出错', err, { operation: 'run_error' });
       console.error(`\n\x1b[31m出错了: ${err.message}\x1b[0m\n`);
     }
   }
@@ -147,10 +183,12 @@ async function main() {
   // 清理
   rl.close();
   storage.close();
+
+  const duration = getDuration();
+  mainLogger.info('程序退出', { operation: 'shutdown', duration });
 }
 
 main().catch((err) => {
   console.error(`致命错误: ${err.message}`);
-  console.error(`堆栈: ${err.stack}`);
   process.exit(1);
 });

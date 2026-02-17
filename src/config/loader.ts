@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse } from 'yaml';
+import { getLogger } from '@/logger/index.js';
 
 export interface KarmaConfig {
   ai: {
@@ -83,6 +84,7 @@ function deepReplaceEnvVars(obj: any): any {
  * 加载配置文件
  */
 export function loadConfig(): KarmaConfig {
+  const logger = getLogger().child({ module: 'system' });
   const configPaths = [
     join(homedir(), '.karma', 'config.yaml'),
     join(process.cwd(), 'config.yaml'),
@@ -96,10 +98,19 @@ export function loadConfig(): KarmaConfig {
         const content = readFileSync(configPath, 'utf-8');
         const parsed = parse(content);
         config = deepMerge(config, deepReplaceEnvVars(parsed));
-        console.log(`加载配置: ${configPath}`);
+        logger.debug('加载配置文件', {
+          operation: 'config_load',
+          metadata: { path: configPath },
+        });
         break;
       } catch (err) {
-        console.warn(`配置文件加载失败 ${configPath}: ${err}`);
+        logger.warn('配置文件加载失败', {
+          operation: 'config_error',
+          metadata: {
+            path: configPath,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        });
       }
     }
   }
@@ -117,7 +128,7 @@ export function loadConfig(): KarmaConfig {
 
   // 验证必要配置
   if (!config.ai.authToken) {
-    console.warn('警告: 未设置 ANTHROPIC_AUTH_TOKEN');
+    logger.warn('未设置 ANTHROPIC_AUTH_TOKEN', { operation: 'config_warning' });
   }
 
   return config;

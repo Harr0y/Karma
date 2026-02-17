@@ -286,6 +286,16 @@ export class StorageService {
       .orderBy(desc(confirmedFacts.createdAt));
   }
 
+  // ===== 客户会话查询 =====
+
+  async getClientSessions(clientId: string): Promise<Session[]> {
+    return this.drizzleDb
+      .select()
+      .from(sessions)
+      .where(eq(sessions.clientId, clientId))
+      .orderBy(desc(sessions.startedAt));
+  }
+
   // ===== 预测管理 =====
 
   async addPrediction(data: CreatePredictionInput): Promise<string> {

@@ -7,6 +7,8 @@ import type { ActiveSession } from '@/session/types.js';
 import type { Skill } from '@/skills/types.js';
 import { buildSystemPrompt } from '@/prompt/builder.js';
 import { MonologueFilter } from './monologue-filter.js';
+import { getLogger } from '@/logger/index.js';
+import type { Logger } from '@/logger/types.js';
 
 export interface AgentRunnerConfig {
   storage: StorageService;
@@ -33,9 +35,11 @@ export interface ProcessedMessage {
  */
 export class AgentRunner {
   private config: AgentRunnerConfig;
+  private logger: Logger;
 
   constructor(config: AgentRunnerConfig) {
     this.config = config;
+    this.logger = getLogger().child({ module: 'agent' });
   }
 
   /**
@@ -46,33 +50,44 @@ export class AgentRunner {
     const { userInput, session } = options;
     const { storage, sessionManager, skills, model, baseUrl, authToken } = this.config;
 
-    console.log('[Runner] 开始处理请求...');
-    console.log('[Runner] userInput:', userInput.substring(0, 50) + '...');
-    console.log('[Runner] session.sdkSessionId:', session.sdkSessionId || '(无)');
+    const getDuration = this.logger.startTimer('run');
+
+    this.logger.debug('开始处理请求', {
+      operation: 'run_start',
+      sessionId: session.id,
+      metadata: {
+        userInput: userInput.substring(0, 50) + '...',
+        hasSdkSession: !!session.sdkSessionId,
+      },
+    });
 
     // 1. 构建 System Prompt
-    console.log('[Runner] 构建 System Prompt...');
+    this.logger.debug('构建 System Prompt', { operation: 'prompt_build' });
     const systemPrompt = await buildSystemPrompt({
       now: new Date(),
       skills,
       platform: 'cli',
     });
-    console.log('[Runner] System Prompt 长度:', systemPrompt.length);
+    this.logger.debug('System Prompt 构建完成', {
+      operation: 'prompt_build',
+      metadata: { promptLength: systemPrompt.length },
+    });
 
     // 2. 构建环境变量
     const env: Record<string, string> = { ...process.env } as Record<string, string>;
     if (authToken) {
       env.ANTHROPIC_AUTH_TOKEN = authToken;
-      console.log('[Runner] 设置 ANTHROPIC_AUTH_TOKEN:', authToken.substring(0, 10) + '...');
     }
     if (baseUrl) {
       env.ANTHROPIC_BASE_URL = baseUrl;
-      console.log('[Runner] 设置 ANTHROPIC_BASE_URL:', baseUrl);
     }
-    console.log('[Runner] model:', model);
 
     // 3. 调用 SDK
-    console.log('[Runner] 调用 SDK query()...');
+    this.logger.debug('调用 SDK', {
+      operation: 'sdk_call',
+      metadata: { model, resume: session.sdkSessionId },
+    });
+
     const queryOptions = {
       model,
       systemPrompt,
@@ -82,12 +97,6 @@ export class AgentRunner {
       cwd: process.cwd(),
       env,
     };
-    console.log('[Runner] query options:', JSON.stringify({
-      model: queryOptions.model,
-      resume: queryOptions.resume,
-      cwd: queryOptions.cwd,
-      envKeys: Object.keys(queryOptions.env).filter(k => k.startsWith('ANTHROPIC')),
-    }));
 
     let q;
     try {
@@ -95,9 +104,8 @@ export class AgentRunner {
         prompt: userInput,
         options: queryOptions,
       });
-      console.log('[Runner] SDK query() 返回，开始迭代...');
     } catch (err: any) {
-      console.error('[Runner] SDK query() 抛出异常:', err.message);
+      this.logger.error('SDK query() 抛出异常', err, { operation: 'sdk_call' });
       throw err;
     }
 
@@ -108,17 +116,14 @@ export class AgentRunner {
     try {
       for await (const msg of q) {
         msgCount++;
-        console.log('[Runner] 收到消息 #' + msgCount, JSON.stringify({
-          type: msg.type,
-          ...(msg.type === 'system' ? { subtype: (msg as any).subtype } : {}),
-          ...(msg.type === 'result' ? {} : {}),
-          ...(msg.type === 'assistant' ? { contentLength: (msg as any).message?.content?.length } : {}),
-          ...('session_id' in msg ? { session_id: msg.session_id } : {}),
-        }));
 
         // 捕获 SDK session_id
         if ('session_id' in msg && msg.session_id) {
-          console.log('[Runner] 保存 SDK session_id:', msg.session_id);
+          this.logger.debug('保存 SDK session_id', {
+            operation: 'sdk_session_save',
+            sessionId: session.id,
+            metadata: { sdkSessionId: msg.session_id },
+          });
           await sessionManager.updateSdkSessionId(session.id, msg.session_id);
           session.sdkSessionId = msg.session_id;
         }
@@ -154,10 +159,19 @@ export class AgentRunner {
           yield { type: 'result', content: 'Turn completed', raw: msg };
         }
       }
-      console.log('[Runner] 迭代结束，共收到', msgCount, '条消息');
+
+      const duration = getDuration();
+      this.logger.info('请求处理完成', {
+        operation: 'run_complete',
+        sessionId: session.id,
+        duration,
+        metadata: { messageCount: msgCount },
+      });
     } catch (err: any) {
-      console.error('[Runner] 迭代异常:', err.message);
-      console.error('[Runner] 异常堆栈:', err.stack);
+      this.logger.error('迭代异常', err, {
+        operation: 'run_error',
+        sessionId: session.id,
+      });
       throw err;
     }
   }

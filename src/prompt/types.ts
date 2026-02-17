@@ -1,13 +1,11 @@
 // Prompt System Types
 
 import type { Skill } from '@/skills/types.js';
+import type { PersonaConfig } from '@/persona/types.js';
 
 export type Platform = 'cli' | 'feishu' | 'wechat';
 
-export interface PersonaConfig {
-  path?: string;      // SOUL.md 文件路径
-  content?: string;   // 直接提供内容
-}
+export { PersonaConfig };
 
 export interface SystemPromptContext {
   now: Date;

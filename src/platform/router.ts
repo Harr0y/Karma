@@ -1,6 +1,8 @@
 // Message Router - 消息路由器
 
 import type { IncomingMessage, MessageHandler } from './types.js';
+import { getLogger } from '@/logger/index.js';
+import type { Logger } from '@/logger/types.js';
 
 export interface MessageRouterConfig {
   maxMessageAge?: number;        // 消息最大年龄（毫秒）
@@ -18,12 +20,14 @@ export class MessageRouter {
   private processedMessages = new Map<string, number>();
   private handlers: MessageHandler[] = [];
   private config: Required<MessageRouterConfig>;
+  private logger: Logger;
 
   constructor(config: MessageRouterConfig = {}) {
     this.config = {
       maxMessageAge: config.maxMessageAge ?? 24 * 60 * 60 * 1000, // 24 小时
       deduplicationTTL: config.deduplicationTTL ?? 60 * 60 * 1000, // 1 小时
     };
+    this.logger = getLogger().child({ module: 'platform' });
   }
 
   /**
@@ -32,19 +36,28 @@ export class MessageRouter {
   async route(message: IncomingMessage): Promise<void> {
     // 1. 去重检查
     if (this.isDuplicate(message.id)) {
-      console.log('[Router] 跳过重复消息:', message.id);
+      this.logger.debug('跳过重复消息', {
+        operation: 'route_skip',
+        metadata: { messageId: message.id, reason: 'duplicate' },
+      });
       return;
     }
 
     // 2. 时效性检查
     if (this.isExpired(message)) {
-      console.log('[Router] 跳过过期消息:', message.id);
+      this.logger.debug('跳过过期消息', {
+        operation: 'route_skip',
+        metadata: { messageId: message.id, reason: 'expired' },
+      });
       return;
     }
 
     // 3. Bot 自消息过滤
     if (message.senderType === 'bot') {
-      console.log('[Router] 跳过 Bot 消息');
+      this.logger.debug('跳过 Bot 消息', {
+        operation: 'route_skip',
+        metadata: { messageId: message.id, reason: 'bot' },
+      });
       return;
     }
 
@@ -56,7 +69,10 @@ export class MessageRouter {
       try {
         await handler(message);
       } catch (err) {
-        console.error('[Router] 处理器错误:', err);
+        this.logger.error('处理器错误', err instanceof Error ? err : undefined, {
+          operation: 'handler_error',
+          metadata: { messageId: message.id },
+        });
       }
     }
   }

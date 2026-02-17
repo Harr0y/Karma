@@ -2,6 +2,7 @@
 
 import { readFile } from 'fs/promises';
 import type { PersonaConfig } from '../types.js';
+import type { PersonaService } from '@/persona/service.js';
 
 const DEFAULT_PERSONA = `# 你的身份
 
@@ -32,11 +33,17 @@ export async function loadPersonaFromFile(path: string): Promise<string> {
 
 /**
  * 构建人设部分
+ * - 如果提供了 personaService，使用 PersonaService（可选 clientId）
  * - 如果提供了 content，直接使用
  * - 如果提供了 path，从文件加载
  * - 否则使用默认人设
  */
 export async function buildPersona(config?: PersonaConfig): Promise<string> {
+  // 新系统：使用 PersonaService
+  if (config?.personaService) {
+    return config.personaService.getPersona(config.clientId);
+  }
+
   // 直接提供内容
   if (config?.content) {
     return config.content;

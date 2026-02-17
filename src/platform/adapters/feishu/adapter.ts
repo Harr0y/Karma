@@ -12,6 +12,8 @@ import type {
 } from '../../types.js';
 import type { FeishuConfig } from './types.js';
 import { FeishuFileHandler } from './file-handler.js';
+import { getLogger } from '@/logger/index.js';
+import type { Logger } from '@/logger/types.js';
 
 /**
  * 飞书平台适配器
@@ -25,9 +27,11 @@ export class FeishuAdapter implements PlatformAdapter {
   private fileHandler: FeishuFileHandler;
   private messageHandlers: MessageHandler[] = [];
   private running = false;
+  private logger: Logger;
 
   constructor(config: FeishuConfig) {
     this.config = config;
+    this.logger = getLogger().child({ module: 'platform' });
     this.client = new lark.Client({
       appId: config.appId,
       appSecret: config.appSecret,
@@ -39,9 +43,11 @@ export class FeishuAdapter implements PlatformAdapter {
 
   async start(): Promise<void> {
     if (!this.config.enabled) {
-      console.log('[Feishu] 适配器未启用');
+      this.logger.info('适配器未启用', { operation: 'start', metadata: { platform: 'feishu' } });
       return;
     }
+
+    this.logger.info('启动飞书适配器', { operation: 'start' });
 
     this.wsClient = new lark.WSClient({
       appId: this.config.appId,
@@ -62,12 +68,12 @@ export class FeishuAdapter implements PlatformAdapter {
     });
 
     this.running = true;
-    console.log('[Feishu] WebSocket 连接已建立');
+    this.logger.info('WebSocket 连接已建立', { operation: 'ws_connect' });
   }
 
   async stop(): Promise<void> {
     this.running = false;
-    console.log('[Feishu] 适配器已停止');
+    this.logger.info('适配器已停止', { operation: 'stop' });
   }
 
   isRunning(): boolean {
@@ -176,16 +182,30 @@ export class FeishuAdapter implements PlatformAdapter {
     try {
       const message = this.parseMessage(data);
 
+      this.logger.debug('收到消息', {
+        operation: 'message_receive',
+        metadata: {
+          messageId: message.id,
+          chatId: message.chatId,
+          senderType: message.senderType,
+        },
+      });
+
       // 分发给所有处理器
       for (const handler of this.messageHandlers) {
         try {
           await handler(message);
         } catch (err) {
-          console.error('[Feishu] 消息处理错误:', err);
+          this.logger.error('消息处理错误', err instanceof Error ? err : undefined, {
+            operation: 'handler_error',
+            metadata: { messageId: message.id },
+          });
         }
       }
     } catch (err) {
-      console.error('[Feishu] 解析消息错误:', err);
+      this.logger.error('解析消息错误', err instanceof Error ? err : undefined, {
+        operation: 'parse_error',
+      });
     }
   }
 
