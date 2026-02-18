@@ -3,11 +3,12 @@
 
 import * as readline from 'readline';
 import { mkdirSync, existsSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, join } from 'path';
 import { StorageService } from './storage/index.js';
 import { loadSkills } from './skills/index.js';
 import { SessionManager } from './session/index.js';
 import { AgentRunner } from './agent/index.js';
+import { PersonaService } from './persona/index.js';
 import { getConfig } from './config/index.js';
 import { getLogger, setLogger, createLogger } from './logger/index.js';
 
@@ -90,18 +91,26 @@ async function main() {
   console.log(`已加载 ${skills.length} 个 Skills:`, skills.map(s => s.name).join(', '));
   console.log();
 
-  // 3. 创建 Runner
+  // 3. 初始化 PersonaService
+  mainLogger.debug('初始化 PersonaService', { operation: 'persona_init' });
+  const personaService = new PersonaService({
+    soulPath: join(process.cwd(), 'SOUL.md'),
+    storage,
+  });
+
+  // 4. 创建 Runner
   mainLogger.debug('创建 AgentRunner', { operation: 'runner_init' });
   const runner = new AgentRunner({
     storage,
     sessionManager,
     skills,
+    personaService,
     model: config.ai.model,
     baseUrl: config.ai.baseUrl,
     authToken: config.ai.authToken,
   });
 
-  // 4. 获取/创建会话
+  // 5. 获取/创建会话
   mainLogger.debug('获取/创建会话', { operation: 'session_get' });
   const session = await sessionManager.getOrCreateSession({
     platform: 'cli',
@@ -113,7 +122,7 @@ async function main() {
     metadata: { hasSdkSession: !!session.sdkSessionId },
   });
 
-  // 5. 首次启动 - Agent 主动开场
+  // 6. 首次启动 - Agent 主动开场
   if (!session.sdkSessionId) {
     mainLogger.info('首次启动，Agent 主动开场', { operation: 'greeting' });
     console.log('\x1b[36m师傅:\x1b[0m');
@@ -134,7 +143,7 @@ async function main() {
     console.log('已恢复之前的会话\n');
   }
 
-  // 6. REPL 循环
+  // 7. REPL 循环
   mainLogger.debug('进入 REPL 循环', { operation: 'repl_start' });
   const rl = readline.createInterface({
     input: process.stdin,

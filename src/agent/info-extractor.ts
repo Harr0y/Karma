@@ -1,0 +1,163 @@
+// Info Extractor - 从 Agent 输出中提取结构化信息
+
+export interface ExtractedClientInfo {
+  name?: string;
+  gender?: 'male' | 'female';
+  birthDate?: string;
+  birthPlace?: string;
+  currentCity?: string;
+}
+
+export interface ExtractedFact {
+  fact: string;
+  category?: string;
+}
+
+export interface ExtractedPrediction {
+  prediction: string;
+  year?: number;
+}
+
+/**
+ * 从 Agent 输出中提取客户信息
+ *
+ * 支持的标签格式：
+ * <client_info>
+ * 姓名：张三
+ * 性别：男
+ * 生辰：1990年5月15日早上6点
+ * 出生地：北京
+ * 现居：上海
+ * </client_info>
+ */
+export function extractClientInfo(text: string): ExtractedClientInfo | null {
+  // 匹配 <client_info> 标签
+  const match = text.match(/<client_info>([\s\S]*?)<\/client_info>/);
+  if (!match) return null;
+
+  const content = match[1].trim();
+  if (!content) return null;
+
+  const info: ExtractedClientInfo = {};
+
+  // 提取姓名（支持中英文冒号）
+  const nameMatch = content.match(/姓名[：:]\s*(.+?)(?:\n|$)/);
+  if (nameMatch) {
+    info.name = nameMatch[1].trim();
+  }
+
+  // 提取性别
+  const genderMatch = content.match(/性别[：:]\s*(男|女)/);
+  if (genderMatch) {
+    info.gender = genderMatch[1] === '男' ? 'male' : 'female';
+  }
+
+  // 提取生辰
+  const birthMatch = content.match(/生辰[：:]\s*(.+?)(?:\n|$)/);
+  if (birthMatch) {
+    info.birthDate = birthMatch[1].trim();
+  }
+
+  // 提取出生地
+  const placeMatch = content.match(/出生地[：:]\s*(.+?)(?:\n|$)/);
+  if (placeMatch) {
+    info.birthPlace = placeMatch[1].trim();
+  }
+
+  // 提取现居地
+  const cityMatch = content.match(/现居[：:]\s*(.+?)(?:\n|$)/);
+  if (cityMatch) {
+    info.currentCity = cityMatch[1].trim();
+  }
+
+  // 如果没有提取到任何信息，返回 null
+  if (Object.keys(info).length === 0) return null;
+
+  return info;
+}
+
+/**
+ * 从 Agent 输出中提取确认的事实
+ *
+ * 支持的标签格式：
+ * <confirmed_fact category="career">目前在互联网公司工作</confirmed_fact>
+ * <confirmed_fact>已婚，有一个孩子</confirmed_fact>
+ */
+export function extractFact(text: string): ExtractedFact | null {
+  // 匹配带或不带 category 的 confirmed_fact 标签
+  const match = text.match(
+    /<confirmed_fact(?:\s+category="([^"]*)")?>([^<]*)<\/confirmed_fact>/
+  );
+  if (!match) return null;
+
+  const fact = match[2].trim();
+  if (!fact) return null;
+
+  return {
+    category: match[1] || undefined,
+    fact,
+  };
+}
+
+/**
+ * 从 Agent 输出中提取预测
+ *
+ * 支持的标签格式：
+ * <prediction year="2025">下半年有晋升机会</prediction>
+ * <prediction>未来三年财运会好转</prediction>
+ */
+export function extractPrediction(text: string): ExtractedPrediction | null {
+  // 匹配带或不带 year 的 prediction 标签
+  const match = text.match(/<prediction(?:\s+year="(\d+)")?>([^<]*)<\/prediction>/);
+  if (!match) return null;
+
+  const prediction = match[2].trim();
+  if (!prediction) return null;
+
+  return {
+    year: match[1] ? parseInt(match[1], 10) : undefined,
+    prediction,
+  };
+}
+
+/**
+ * 从文本中提取所有确认的事实
+ */
+export function extractAllFacts(text: string): ExtractedFact[] {
+  const facts: ExtractedFact[] = [];
+  const regex = /<confirmed_fact(?:\s+category="([^"]*)")?>([^<]*)<\/confirmed_fact>/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    const fact = match[2].trim();
+    if (fact) {
+      facts.push({
+        category: match[1] || undefined,
+        fact,
+      });
+    }
+  }
+
+  return facts;
+}
+
+/**
+ * 从文本中提取所有预测
+ */
+export function extractAllPredictions(text: string): ExtractedPrediction[] {
+  const predictions: ExtractedPrediction[] = [];
+  const regex = /<prediction(?:\s+year="(\d+)")?>([^<]*)<\/prediction>/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    const prediction = match[2].trim();
+    if (prediction) {
+      predictions.push({
+        year: match[1] ? parseInt(match[1], 10) : undefined,
+        prediction,
+      });
+    }
+  }
+
+  return predictions;
+}

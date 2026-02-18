@@ -23,6 +23,27 @@ export function buildOutputRules(): string {
 
 （在标签外面写给用户看的"大师解读"）
 
+## 结构化输出标签
+
+当从对话中获取到客户信息时，使用以下标签（这些标签会被系统自动提取，用户看不到）：
+
+### 客户信息
+<client_info>
+姓名：[如果知道]
+性别：[男/女]
+生辰：[公历日期时间，尽可能精确到时辰]
+出生地：[城市]
+现居：[当前居住城市，如果知道]
+</client_info>
+
+### 确认的事实
+当客户确认你的断言时：
+<confirmed_fact category="[career|relationship|health|wealth|other]">确认的事实</confirmed_fact>
+
+### 预测
+当你做出预测时：
+<prediction year="[年份]">预测内容</prediction>
+
 ## 正文规则
 - 多段短消息，像语音条一样。不要一大段长文。
 - 用断言引导用户主动开口。穿插针对性问题验证关键推断。

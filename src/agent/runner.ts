@@ -5,8 +5,14 @@ import type { StorageService } from '@/storage/service.js';
 import type { SessionManager } from '@/session/manager.js';
 import type { ActiveSession } from '@/session/types.js';
 import type { Skill } from '@/skills/types.js';
+import type { PersonaService } from '@/persona/service.js';
 import { buildSystemPrompt } from '@/prompt/builder.js';
 import { MonologueFilter } from './monologue-filter.js';
+import {
+  extractClientInfo,
+  extractFact,
+  extractPrediction,
+} from './info-extractor.js';
 import { getLogger } from '@/logger/index.js';
 import type { Logger } from '@/logger/types.js';
 
@@ -14,6 +20,7 @@ export interface AgentRunnerConfig {
   storage: StorageService;
   sessionManager: SessionManager;
   skills: Skill[];
+  personaService?: PersonaService;
   model: string;
   baseUrl?: string;
   authToken?: string;
@@ -48,7 +55,8 @@ export class AgentRunner {
    */
   async *run(options: RunOptions): AsyncGenerator<ProcessedMessage> {
     const { userInput, session } = options;
-    const { storage, sessionManager, skills, model, baseUrl, authToken } = this.config;
+    const { storage, sessionManager, skills, personaService, model, baseUrl, authToken } =
+      this.config;
 
     const getDuration = this.logger.startTimer('run');
 
@@ -61,12 +69,29 @@ export class AgentRunner {
       },
     });
 
+    // 0. 保存用户消息
+    await storage.addMessage(session.id, 'user', userInput);
+
     // 1. 构建 System Prompt
     this.logger.debug('构建 System Prompt', { operation: 'prompt_build' });
+
+    // 获取客户档案（如果有）
+    const clientId = session.clientId;
+    const clientProfile = clientId
+      ? await storage.generateClientProfilePrompt(clientId)
+      : undefined;
+
     const systemPrompt = await buildSystemPrompt({
       now: new Date(),
       skills,
       platform: 'cli',
+      personaConfig: personaService
+        ? {
+            personaService,
+            clientId,
+          }
+        : undefined,
+      clientProfile,
     });
     this.logger.debug('System Prompt 构建完成', {
       operation: 'prompt_build',
@@ -112,6 +137,8 @@ export class AgentRunner {
     // 4. 处理流式消息
     const filter = new MonologueFilter();
     let msgCount = 0;
+    let assistantContent = ''; // 收集助手响应（过滤后）
+    let rawContent = ''; // 收集原始响应（用于提取信息）
 
     try {
       for await (const msg of q) {
@@ -119,7 +146,7 @@ export class AgentRunner {
 
         // 捕获 SDK session_id
         if ('session_id' in msg && msg.session_id) {
-          this.logger.debug('保存 SDK session_id', {
+          this.logger.debug('保存 SDK session-id', {
             operation: 'sdk_session_save',
             sessionId: session.id,
             metadata: { sdkSessionId: msg.session_id },
@@ -138,9 +165,11 @@ export class AgentRunner {
           if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === 'text') {
+                rawContent += block.text; // 收集原始内容
                 // 过滤 inner_monologue
                 const filtered = filter.process(block.text);
                 if (filtered) {
+                  assistantContent += filtered; // 收集过滤后的内容
                   yield { type: 'text', content: filtered, raw: msg };
                 }
               } else if (block.type === 'tool_use') {
@@ -154,8 +183,24 @@ export class AgentRunner {
           // 刷新过滤器剩余内容
           const remaining = filter.flush();
           if (remaining) {
+            assistantContent += remaining;
+            rawContent += remaining;
             yield { type: 'text', content: remaining, raw: msg };
           }
+
+          // 5. 提取并保存结构化信息
+          await this.extractAndSaveInfo(rawContent, session);
+
+          // 6. 保存助手消息
+          if (assistantContent) {
+            await storage.addMessage(session.id, 'assistant', assistantContent);
+            this.logger.debug('助手消息已保存', {
+              operation: 'message_save',
+              sessionId: session.id,
+              metadata: { contentLength: assistantContent.length },
+            });
+          }
+
           yield { type: 'result', content: 'Turn completed', raw: msg };
         }
       }
@@ -186,6 +231,123 @@ export class AgentRunner {
       } else if (msg.type === 'tool_use') {
         yield `\n\x1b[33m[调用工具: ${msg.content}]\x1b[0m\n`;
       }
+    }
+  }
+
+  /**
+   * 从响应中提取并保存结构化信息
+   */
+  private async extractAndSaveInfo(
+    rawContent: string,
+    session: ActiveSession
+  ): Promise<void> {
+    const { storage } = this.config;
+
+    // 1. 提取客户信息
+    const clientInfo = extractClientInfo(rawContent);
+    if (clientInfo) {
+      await this.handleClientInfo(clientInfo, session);
+    }
+
+    // 2. 提取确认的事实
+    const fact = extractFact(rawContent);
+    if (fact && session.clientId) {
+      await storage.addConfirmedFact({
+        clientId: session.clientId,
+        sessionId: session.id,
+        fact: fact.fact,
+        category: fact.category,
+        confirmed: true,
+      });
+      this.logger.debug('保存确认事实', {
+        operation: 'fact_save',
+        metadata: { fact: fact.fact, category: fact.category },
+      });
+    }
+
+    // 3. 提取预测
+    const prediction = extractPrediction(rawContent);
+    if (prediction && session.clientId) {
+      await storage.addPrediction({
+        clientId: session.clientId,
+        sessionId: session.id,
+        prediction: prediction.prediction,
+        targetYear: prediction.year,
+      });
+      this.logger.debug('保存预测', {
+        operation: 'prediction_save',
+        metadata: { prediction: prediction.prediction, year: prediction.year },
+      });
+    }
+  }
+
+  /**
+   * 处理客户信息
+   */
+  private async handleClientInfo(
+    info: ReturnType<typeof extractClientInfo>,
+    session: ActiveSession
+  ): Promise<void> {
+    const { storage, sessionManager } = this.config;
+
+    // 如果会话还没有关联客户
+    if (!session.clientId) {
+      // 尝试根据生辰信息查找已有客户
+      let clientId: string | null = null;
+
+      if (info!.birthDate && info!.birthPlace) {
+        const existingClient = await storage.findClientByBirthInfo(
+          info!.birthDate,
+          info!.birthPlace
+        );
+        if (existingClient) {
+          clientId = existingClient.id;
+          // 更新客户的最后访问时间和会话计数
+          await storage.updateClient(clientId, {
+            sessionCount: existingClient.sessionCount + 1,
+            name: info!.name || existingClient.name,
+            currentCity: info!.currentCity || existingClient.currentCity,
+          });
+          this.logger.info('关联已有客户', {
+            operation: 'client_link',
+            clientId,
+          });
+        }
+      }
+
+      // 如果没有找到已有客户，创建新客户
+      if (!clientId) {
+        clientId = await storage.createClient({
+          name: info!.name,
+          gender: info!.gender,
+          birthDate: info!.birthDate,
+          birthPlace: info!.birthPlace,
+          currentCity: info!.currentCity,
+        });
+        this.logger.info('创建新客户', {
+          operation: 'client_create',
+          clientId,
+        });
+      }
+
+      // 更新会话关联
+      session.clientId = clientId;
+      // 注意：这里需要在 session 表中也更新 clientId
+      // 暂时通过 storage 直接更新
+      await storage.updateSdkSessionId(session.id, session.sdkSessionId || '');
+    } else {
+      // 已有客户，更新信息
+      await storage.updateClient(session.clientId, {
+        name: info!.name,
+        gender: info!.gender,
+        birthDate: info!.birthDate,
+        birthPlace: info!.birthPlace,
+        currentCity: info!.currentCity,
+      });
+      this.logger.debug('更新客户信息', {
+        operation: 'client_update',
+        clientId: session.clientId,
+      });
     }
   }
 }

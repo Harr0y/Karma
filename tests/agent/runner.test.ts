@@ -18,7 +18,7 @@ describe('AgentRunner', () => {
   let config: AgentRunnerConfig;
   let runner: AgentRunner;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     storage = new StorageService(':memory:');
     sessionManager = new SessionManager(storage);
     config = {
@@ -43,11 +43,8 @@ describe('AgentRunner', () => {
 
   describe('run', () => {
     it('should call SDK with correct parameters', async () => {
-      const session: ActiveSession = {
-        id: 'test-session',
-        platform: 'cli',
-        startedAt: new Date(),
-      };
+      // 先在数据库中创建 session
+      const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
 
       // Mock SDK response
       const mockQuery = vi.mocked(query);
@@ -71,11 +68,7 @@ describe('AgentRunner', () => {
     });
 
     it('should update SDK session ID', async () => {
-      const session: ActiveSession = {
-        id: 'test-session',
-        platform: 'cli',
-        startedAt: new Date(),
-      };
+      const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
 
       const mockQuery = vi.mocked(query);
       mockQuery.mockImplementation(async function* () {
@@ -91,11 +84,7 @@ describe('AgentRunner', () => {
     });
 
     it('should filter inner_monologue from output', async () => {
-      const session: ActiveSession = {
-        id: 'test-session',
-        platform: 'cli',
-        startedAt: new Date(),
-      };
+      const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
 
       const mockQuery = vi.mocked(query);
       mockQuery.mockImplementation(async function* () {
@@ -122,11 +111,7 @@ describe('AgentRunner', () => {
     });
 
     it('should yield tool_use messages', async () => {
-      const session: ActiveSession = {
-        id: 'test-session',
-        platform: 'cli',
-        startedAt: new Date(),
-      };
+      const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
 
       const mockQuery = vi.mocked(query);
       mockQuery.mockImplementation(async function* () {
@@ -152,12 +137,8 @@ describe('AgentRunner', () => {
     });
 
     it('should use resume parameter for existing session', async () => {
-      const session: ActiveSession = {
-        id: 'test-session',
-        sdkSessionId: 'sdk-resume-123',
-        platform: 'cli',
-        startedAt: new Date(),
-      };
+      const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+      session.sdkSessionId = 'sdk-resume-123';
 
       const mockQuery = vi.mocked(query);
       mockQuery.mockImplementation(async function* () {
@@ -171,15 +152,42 @@ describe('AgentRunner', () => {
       const callArgs = mockQuery.mock.calls[0][0] as any;
       expect(callArgs?.options?.resume).toBe('sdk-resume-123');
     });
+
+    it('should save user and assistant messages to storage', async () => {
+      const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+      const mockQuery = vi.mocked(query);
+      mockQuery.mockImplementation(async function* () {
+        // 模拟处理延迟
+        await new Promise((r) => setTimeout(r, 10));
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: 'Hello there!' },
+            ],
+          },
+        };
+        yield { type: 'result' };
+      });
+
+      for await (const _ of runner.run({ userInput: 'test input', session })) {
+        // consume
+      }
+
+      // 验证消息已保存（按时间倒序，最新的在前）
+      const messages = await storage.getSessionMessages(session.id);
+      expect(messages).toHaveLength(2);
+      expect(messages[0].role).toBe('assistant');
+      expect(messages[0].content).toBe('Hello there!');
+      expect(messages[1].role).toBe('user');
+      expect(messages[1].content).toBe('test input');
+    });
   });
 
   describe('runText', () => {
     it('should yield only text output', async () => {
-      const session: ActiveSession = {
-        id: 'test-session',
-        platform: 'cli',
-        startedAt: new Date(),
-      };
+      const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
 
       const mockQuery = vi.mocked(query);
       mockQuery.mockImplementation(async function* () {
