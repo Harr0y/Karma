@@ -51,13 +51,24 @@ const DEFAULT_CONFIG: KarmaConfig = {
 };
 
 /**
- * 替换环境变量占位符
+ * 替换环境变量占位符和 ~ 路径
  * 格式: ${ENV_VAR:default_value}
+ * 同时展开 ~ 为用户主目录
  */
 function replaceEnvVars(str: string): string {
-  return str.replace(/\$\{([^}:]+)(?::([^}]*))?\}/g, (_, envVar, defaultValue) => {
+  let result = str;
+
+  // 先展开 ~ 为用户主目录
+  if (result.startsWith('~/')) {
+    result = join(homedir(), result.slice(2));
+  }
+
+  // 再替换环境变量
+  result = result.replace(/\$\{([^}:]+)(?::([^}]*))?\}/g, (_, envVar, defaultValue) => {
     return process.env[envVar] || defaultValue || '';
   });
+
+  return result;
 }
 
 /**
