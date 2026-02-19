@@ -6,10 +6,15 @@
 - **[architecture.md](./architecture.md)** - 完整架构设计
 - **[quality-report.md](./quality-report.md)** - 代码质量报告
 
+## 用户文档
+
+- **[USER_GUIDE.md](./USER_GUIDE.md)** - 用户指南（推荐）
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - 部署指南
+
 ## 开发文档
 
 - **[mvp-plan.md](./mvp-plan.md)** - MVP 计划
-- **[next-iteration-plan.md](./next-iteration-plan.md)** - 下一步计划
+- **[next-iteration-plan.md](./next-iteration-plan.md)** - 下一步迭代计划
 
 ## 归档文档
 
@@ -30,8 +35,9 @@
 
 ### 新手入门
 1. 看 [CURRENT_STATUS.md](./CURRENT_STATUS.md) 了解项目现状
-2. 看 [../README.md](../README.md) 运行项目
-3. 看 [../CLAUDE.md](../CLAUDE.md) 开发指南
+2. 看 [USER_GUIDE.md](./USER_GUIDE.md) 快速上手
+3. 看 [../README.md](../README.md) 运行项目
+4. 看 [DEPLOYMENT.md](./DEPLOYMENT.md) 部署到生产
 
 ### 深入理解
 1. 看 [architecture.md](./architecture.md) 了解架构设计
@@ -51,3 +57,6 @@
 - ✅ 更新 architecture.md 实现状态
 - ✅ 归档历史 Phase 文档
 - ✅ 创建文档索引
+- ✅ 更新 next-iteration-plan.md（Phase 7 完成）
+- ✅ 创建 USER_GUIDE.md
+- ✅ 创建 DEPLOYMENT.md

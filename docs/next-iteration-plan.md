@@ -1,208 +1,321 @@
-# Karma V3 下一步迭代计划
+# Karma 下一步迭代计划
 
-> 基于 MVP 完成，准备进入 Phase 5 (Feishu)
+> 基于 Phase 7 完成，准备进入优化和验证阶段
 
 ---
 
 ## 当前状态
 
-| 模块 | 状态 | 测试 |
+| 模块 | 状态 | 测试 | 说明 |
+|------|------|------|------|
+| Storage | ✅ 完成 | 31 | 5 张表 + 21 个 CRUD 方法 |
+| Skills | ✅ 完成 | 39 | 3 个核心 Skills |
+| Prompt | ✅ 完成 | 32 | 9 个模块化部分 |
+| Session | ✅ 完成 | 20 | 内存 + 数据库持久化 |
+| Agent | ✅ 完成 | 49 | 消息持久化 + 信息提取 |
+| Persona | ✅ 完成 | 20 | SOUL.md + 历史微调 |
+| Tools | ✅ 完成 | 10 | 八字排盘工具 |
+| Platform | ✅ 完成 | 16 | CLI + 飞书适配器 |
+| **总计** | **✅ Phase 7 完成** | **296 测试** | **生产就绪** |
+
+---
+
+## 优先级 P0（立即执行）
+
+### 1. 修复测试（30分钟）
+
+**问题**：1 个测试失败
+
+```
+tests/agent/runner.test.ts > should use resume parameter
+```
+
+**原因**：Karma 使用自己的会话管理（数据库历史），不依赖 SDK resume
+
+**解决方案**：
+- [ ] 修改测试以反映实际行为
+- [ ] 或删除该测试（功能正常）
+
+**预期结果**：296/296 测试通过
+
+---
+
+### 2. 真实用户测试（1-2 周）
+
+**目标**：验证核心功能在真实场景的表现
+
+**测试规模**：10-20 人
+
+**测试流程**：
+1. [ ] 招募测试用户（朋友圈、社群）
+2. [ ] 准备测试场景（初访、老客户、不同问题类型）
+3. [ ] 收集反馈（问卷 + 访谈）
+4. [ ] 记录问题（准确率、体验、Bug）
+
+**关键指标**：
+- [ ] 对话完成率（目标 > 90%）
+- [ ] 信息提取准确率（手动验证）
+- [ ] 用户满意度（1-5 分，目标 > 4.0）
+- [ ] 常见问题分类
+
+**工具**：
+- 问卷星/腾讯问卷
+- 飞书表单
+- 数据库导出分析
+
+---
+
+### 3. 数据验证（1 天）
+
+**目标**：确认数据闭环正常工作
+
+**验证项**：
+- [ ] 检查 clients 表（客户档案是否正确建立）
+- [ ] 检查 messages 表（对话是否完整保存）
+- [ ] 检查 confirmed_facts 表（事实提取是否准确）
+- [ ] 检查 predictions 表（预测是否记录）
+
+**方法**：
+```bash
+# 运行测试对话
+karma
+
+# 导出数据库检查
+sqlite3 ~/.karma/karma.db
+SELECT * FROM clients;
+SELECT * FROM messages;
+SELECT * FROM predictions;
+
+# 分析提取准确率（手动验证 50 条）
+```
+
+---
+
+## 优先级 P1（近期优化）
+
+### 4. Skills 优化（1 周）
+
+**基于用户反馈**：
+- [ ] 分析断言命中率（哪些断言经常命中？）
+- [ ] 补充低命中率阶段的断言库
+- [ ] 优化冷读话术（根据真实对话调整）
+- [ ] 添加更多真实范例
+
+**新增 Skills**（可选）：
+- [ ] `health` - 健康相关断言库
+- [ ] `wealth` - 财运相关断言库
+- [ ] `relationship` - 感情相关断言库
+
+---
+
+### 5. 飞书部署验证（2-3 天）
+
+**目标**：确保飞书生产环境稳定
+
+**任务**：
+- [ ] 部署到测试服务器
+- [ ] 配置飞书机器人
+- [ ] WebSocket 连接测试
+- [ ] 消息收发测试
+- [ ] 文件上传下载测试
+- [ ] 压力测试（10 并发）
+
+**监控**：
+- [ ] 添加日志（Pino 已集成）
+- [ ] 添加错误追踪（Sentry）
+- [ ] 添加性能监控（响应时间、内存）
+
+---
+
+### 6. 性能优化（2-3 天）
+
+**当前问题**：
+- 每次对话都重新构建 System Prompt（可缓存）
+- Info Extractor 每次都全量提取（可增量）
+- 数据库查询未优化（可加索引）
+
+**优化方案**：
+- [ ] System Prompt 缓存机制
+- [ ] 增量信息提取（只提取新增部分）
+- [ ] 数据库索引优化
+- [ ] 连接池配置
+
+**预期效果**：
+- 响应时间：2s → 1s
+- 内存占用：减少 30%
+
+---
+
+## 优先级 P2（长期规划）
+
+### 7. 预测准确率追踪（6 个月）
+
+**目标**：验证预测的真实准确性
+
+**方法**：
+1. [ ] 6 个月后导出 predictions 表
+2. [ ] 联系客户验证（问卷/访谈）
+3. [ ] 计算准确率
+4. [ ] 分析哪些类型预测更准
+
+**指标**：
+- 预测验证率（多少预测被验证？）
+- 预测准确率（多少预测成真？）
+- 分类型准确率（事业/感情/健康）
+
+**应用**：
+- 准确率高的预测 → 强化相关 Skills
+- 准确率低的预测 → 调整方法论
+
+---
+
+### 8. 多模型支持（1 周）
+
+**目标**：支持更多 AI 模型
+
+**任务**：
+- [ ] GLM（智谱 AI）支持
+- [ ] OpenAI GPT 支持
+- [ ] 模型切换机制
+- [ ] 成本对比
+
+**配置**：
+```yaml
+ai:
+  provider: anthropic | glm | openai
+  model: claude-sonnet-4-5 | glm-4 | gpt-4o
+```
+
+---
+
+### 9. Web UI（2-3 周）
+
+**目标**：提供 Web 管理界面
+
+**功能**：
+- [ ] 客户档案管理
+- [ ] 对话历史查看
+- [ ] 预测追踪
+- [ ] 统计分析面板
+
+**技术栈**：
+- 前端：React/Vue + TailwindCSS
+- 后端：已有 HTTP API（`karma server`）
+- 数据库：SQLite（已有）
+
+---
+
+## 实施路线图
+
+### Week 1-2（P0）
+```
+Day 1:    修复测试
+Day 2-3:  数据验证
+Day 4-14: 真实用户测试
+```
+
+### Week 3-4（P1）
+```
+Day 1-3:  飞书部署验证
+Day 4-7:  Skills 优化
+Day 8-10: 性能优化
+```
+
+### Month 2-3（P2）
+```
+Week 1-2: 多模型支持
+Week 3-4: Web UI（MVP）
+Week 5-6: 预测追踪系统
+```
+
+### Month 6（长期）
+```
+Week 1-2: 预测准确率分析
+Week 3-4: Skills 持续优化
+```
+
+---
+
+## 依赖和风险
+
+### 依赖
+
+| 依赖 | 用途 | 状态 |
 |------|------|------|
-| Storage | ✅ 完成 | 31 |
-| Skills | ✅ 完成 | 39 |
-| Prompt | ✅ 完成 | 32 |
-| Session | ✅ 完成 | 20 |
-| Agent | ✅ 完成 | 33 |
-| CLI | ✅ 完成 | - |
-| **总计** | **178 测试通过** | |
+| Claude API | AI 模型 | ✅ |
+| lunar-javascript | 八字计算 | ✅ |
+| SQLite | 数据存储 | ✅ |
+| 飞书 SDK | 机器人 | ✅ |
 
----
+### 风险
 
-## Phase 5: Feishu 平台适配
-
-### 目标
-
-将 Karma 接入飞书机器人，实现真实场景使用。
-
-### 5.1 Feishu SDK 集成 (2h)
-
-**任务**:
-- [ ] 安装 @whisper-bot/feishu-sdk 或类似包
-- [ ] 创建 `src/feishu/client.ts` - 飞书 API 封装
-- [ ] 创建 `src/feishu/sender.ts` - 消息发送器
-- [ ] 配置 appId, appSecret 环境变量
-
-**产出**:
-```typescript
-// src/feishu/sender.ts
-export class FeishuSender {
-  send(chatId: string, content: string, format?: 'text' | 'markdown'): Promise<void>
-  sendFile(chatId: string, filePath: string): Promise<void>
-}
-```
-
-### 5.2 Feishu Adapter (2h)
-
-**任务**:
-- [ ] 创建 `src/adapters/feishu.ts` - 平台适配器
-- [ ] 处理飞书事件 (message, file)
-- [ ] 调用 AgentRunner
-- [ ] 流式输出转飞书消息
-
-**产出**:
-```typescript
-// src/adapters/feishu.ts
-export class FeishuAdapter {
-  handleMessage(event: FeishuEvent): Promise<void>
-}
-```
-
-### 5.3 Output Adapter 重构 (2h)
-
-**任务**:
-- [ ] 创建 `src/output/adapter.ts` - 接口定义
-- [ ] 创建 `src/output/cli.ts` - CLI 实现
-- [ ] 创建 `src/output/feishu.ts` - 飞书实现
-- [ ] Markdown → Feishu 卡片转换 (可选)
-
-**产出**:
-```typescript
-// src/output/adapter.ts
-export interface OutputAdapter {
-  send(msg: OutputMessage): Promise<void>
-  sendBatch(msgs: OutputMessage[]): Promise<void>
-}
-```
-
-### 5.4 MCP 工具 (1h)
-
-**任务**:
-- [ ] 创建 `src/mcp/feishu-tools.ts`
-- [ ] 实现 send_user_feedback
-- [ ] 实现 send_file_to_feishu
-- [ ] 集成到 AgentRunner
-
-**产出**:
-```typescript
-// src/mcp/feishu-tools.ts
-export function createFeishuMcpServer(chatId: string): McpServer
-```
-
-### 5.5 测试 (2h)
-
-**任务**:
-- [ ] FeishuSender 单元测试
-- [ ] FeishuAdapter 单元测试
-- [ ] OutputAdapter 测试
-- [ ] 集成测试
-
-**产出**: 20+ 新测试
-
----
-
-## Phase 5 工作量
-
-| 任务 | 工作量 |
-|------|--------|
-| Feishu SDK | 2h |
-| Feishu Adapter | 2h |
-| Output Adapter | 2h |
-| MCP 工具 | 1h |
-| 测试 | 2h |
-| **总计** | **9h** |
-
----
-
-## Phase 6: 配置系统完善 (可选)
-
-### 6.1 日志系统 (1h)
-
-**任务**:
-- [ ] 创建 `src/logger/index.ts`
-- [ ] 文件日志 + 控制台日志
-- [ ] 日志级别控制
-- [ ] 调试日志开关
-
-### 6.2 配置热加载 (0.5h)
-
-**任务**:
-- [ ] 监听配置文件变化
-- [ ] 重新加载配置
-
-### 6.3 SOUL.md 支持 (1h)
-
-**任务**:
-- [ ] 创建 `src/persona/loader.ts`
-- [ ] 解析 SOUL.md
-- [ ] 集成到 Prompt Builder
-
-**Phase 6 总计**: 2.5h
-
----
-
-## 优先级排序
-
-```
-Phase 5.1 Feishu SDK    ████░░░░░░  2h
-Phase 5.2 Adapter       ████░░░░░░  2h
-Phase 5.3 Output        ████░░░░░░  2h
-Phase 5.4 MCP           ██░░░░░░░░  1h
-Phase 5.5 测试          ████░░░░░░  2h
-─────────────────────────────────────
-Phase 5 总计            9h
-
-Phase 6.1 日志          ██░░░░░░░░  1h
-Phase 6.2 热加载        █░░░░░░░░░  0.5h
-Phase 6.3 SOUL.md       ██░░░░░░░░  1h
-─────────────────────────────────────
-Phase 6 总计            2.5h
-```
-
----
-
-## 建议执行顺序
-
-```
-Week 1:
-  Day 1-2: Phase 5.1 + 5.2 (Feishu SDK + Adapter)
-  Day 3: Phase 5.3 (Output Adapter)
-  Day 4: Phase 5.4 (MCP 工具)
-  Day 5: Phase 5.5 (测试)
-
-Week 2 (可选):
-  Day 1: Phase 6.1 (日志)
-  Day 2: Phase 6.2 + 6.3 (热加载 + SOUL.md)
-```
-
----
-
-## 依赖
-
-| 依赖 | 用途 |
-|------|------|
-| @whisper-bot/feishu-sdk | 飞书 API (或自建) |
-| markdown-to-feishu | Markdown 转卡片 (可选) |
-
----
-
-## 风险
-
-| 风险 | 缓解 |
-|------|------|
-| 飞书 SDK 不稳定 | 自建 API 封装 |
-| 卡片格式复杂 | 先用纯文本 |
-| 流式输出延迟 | 批量发送 |
+| 风险 | 影响 | 缓解 |
+|------|------|------|
+| 用户测试反馈差 | 高 | 小规模测试，快速迭代 |
+| API 成本过高 | 中 | 多模型支持，成本优化 |
+| 预测准确率低 | 高 | 持续优化 Skills |
+| 性能瓶颈 | 中 | 性能优化，缓存机制 |
 
 ---
 
 ## 验收标准
 
-- [ ] 飞书机器人能接收消息
-- [ ] Agent 能正常响应
-- [ ] 流式输出正常
-- [ ] 会话能恢复
-- [ ] 20+ 测试通过
+### P0 完成标准
+- [ ] 296/296 测试通过
+- [ ] 10+ 真实用户测试完成
+- [ ] 数据闭环验证通过
+- [ ] 用户满意度 > 4.0
+
+### P1 完成标准
+- [ ] 飞书生产环境稳定运行
+- [ ] Skills 根据反馈优化
+- [ ] 响应时间 < 1.5s
+- [ ] 错误率 < 1%
+
+### P2 完成标准
+- [ ] 预测追踪系统上线
+- [ ] 多模型支持
+- [ ] Web UI MVP 上线
+- [ ] 准确率追踪开始
 
 ---
 
-**要开始 Phase 5 吗？**
+## 成功指标
+
+### 短期（1 个月）
+- ✅ 真实用户测试通过
+- ✅ 飞书稳定运行
+- ✅ 用户满意度 > 4.0
+
+### 中期（3 个月）
+- ✅ 100+ 用户使用
+- ✅ Skills 优化完成
+- ✅ 性能达标
+
+### 长期（6 个月）
+- ✅ 预测准确率 > 60%
+- ✅ 商业化探索
+- ✅ 社区建设
+
+---
+
+## 下一步行动
+
+**立即执行**（今天）：
+1. [ ] 修复失败的测试
+2. [ ] 准备用户测试计划
+3. [ ] 验证数据闭环
+
+**本周执行**：
+1. [ ] 开始用户测试（5 人）
+2. [ ] 收集初步反馈
+3. [ ] 准备飞书部署
+
+**本月执行**：
+1. [ ] 完成用户测试（20 人）
+2. [ ] 飞书生产环境上线
+3. [ ] Skills 首轮优化
+
+---
+
+**准备好了吗？** 🚀
