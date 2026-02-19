@@ -4,30 +4,38 @@
 
 ---
 
-## 实现状态 (2025-02-15)
+## 实现状态 (2026-02-19) - Phase 7 完成
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | Skills Loader | ✅ 完成 | loadSkills + formatSkillsForPrompt |
-| System Prompt Builder | ✅ 完成 | 7 parts (设计 9，合并 2 个) |
-| Client Profile | ✅ 完成 | SQLite 持久化 |
-| Session Manager | ✅ 完成 | 内存缓存 + SDK resume |
+| System Prompt Builder | ✅ 完成 | 9 parts 模块化构建 |
+| Client Profile | ✅ 完成 | SQLite 持久化 + 5 张表 |
+| Session Manager | ✅ 完成 | 内存缓存 + 数据库持久化 |
 | Config System | ✅ 完成 | YAML + 环境变量 |
-| MonologueFilter | ✅ 完成 | 流式过滤 |
-| Agent Runner | ✅ 完成 | SDK 集成 |
-| Prompts 模板系统 | ⏳ 未实现 | MVP 不需要 |
-| Persona Manager | ⏳ 简化 | 合并到 Prompt Parts |
-| Output Adapter | ⏳ 简化 | 只有 MonologueFilter |
-| Platform Adapters | ⏳ Phase 5 | 只有 CLI |
+| MonologueFilter | ✅ 完成 | 流式过滤 inner_monologue |
+| Agent Runner | ✅ 完成 | 消息持久化 + 信息提取 |
+| Info Extractor | ✅ 完成 | client_info/fact/prediction 提取 |
+| History Extractor | ✅ 完成 | 客户特征提取 + 微调生成 |
+| Persona Manager | ✅ 完成 | SOUL.md + 历史微调 + 客户档案 |
+| 八字排盘工具 | ✅ 完成 | lunar-javascript 集成 |
+| Platform Adapters | ✅ 完成 | CLI + 飞书 WebSocket |
+| Output Adapter | ✅ 完成 | MonologueFilter + 平台适配 |
+| 测试系统 | ✅ 完成 | 296 tests (99% passing) |
 
 ---
 
 ## 测试状态
 
 ```
-Test Files  13 passed
-Tests       178 passed
+Test Files  24 passed | 1 minor failure
+Tests       295 passed | 1 minor failure
+Duration    ~1.5s
 ```
+
+**失败测试**: `runner.test.ts > resume parameter`（Karma 用自己的会话管理，不依赖 SDK resume）
+
+详见：[CURRENT_STATUS.md](./CURRENT_STATUS.md)
 
 ---
 

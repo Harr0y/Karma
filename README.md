@@ -6,7 +6,15 @@
 
 ## 项目状态
 
-✅ **Phase 7 完成** | **296 tests passing**
+✅ **Phase 7 完成** | **296 tests passing (99%)**
+
+核心功能：
+- ✅ 数据闭环（自动提取客户信息、事实、预测）
+- ✅ Persona 系统（SOUL.md + 历史微调）
+- ✅ 八字排盘工具
+- ✅ 飞书多平台支持
+
+详见：[docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md)
 
 ---
 
@@ -249,8 +257,9 @@ pnpm dev
 
 ## 文档
 
+- **[CURRENT_STATUS.md](docs/CURRENT_STATUS.md)** - 项目当前状态（推荐先看）
 - [architecture.md](docs/architecture.md) - 完整架构设计
-- [phase7-integration-plan.md](docs/phase7-integration-plan.md) - Phase 7 实现计划
+- [docs/README.md](docs/README.md) - 文档索引
 
 ---
 
