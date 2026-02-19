@@ -11,11 +11,58 @@ import { AgentRunner } from './agent/index.js';
 import { PersonaService } from './persona/index.js';
 import { getConfig } from './config/index.js';
 import { getLogger, setLogger, createLogger } from './logger/index.js';
+import { startServer } from './api/index.js';
 
 // 首次启动提示
 const GREETING_PROMPT = '一位新的客人到来了。请按照你的方法论开始接待。简单直接地向客人打招呼，请他们把生辰时间、性别和出生地发给你。不要搞仪式感，像真师傅一样随意自然。';
 
+function printUsage() {
+  console.log(`
+  \x1b[33m✦ Karma 命理师 ✦\x1b[0m
+
+  用法:
+    karma              启动交互式 REPL
+    karma server       启动 HTTP API 服务器
+    karma --help       显示帮助信息
+
+  服务器选项:
+    --port <number>    指定端口 (默认: 3000)
+    --host <string>    指定主机 (默认: localhost)
+`);
+}
+
 async function main() {
+  const args = process.argv.slice(2);
+
+  // 解析参数
+  if (args.includes('--help') || args.includes('-h')) {
+    printUsage();
+    process.exit(0);
+  }
+
+  // server 子命令
+  if (args[0] === 'server') {
+    const portIndex = args.indexOf('--port');
+    const hostIndex = args.indexOf('--host');
+
+    const port = portIndex !== -1 ? parseInt(args[portIndex + 1], 10) : 3000;
+    const host = hostIndex !== -1 ? args[hostIndex + 1] : 'localhost';
+
+    console.log('\n  \x1b[33m✦ Karma API Server ✦\x1b[0m\n');
+    console.log(`启动中... (端口: ${port})\n`);
+
+    await startServer({ port, host });
+
+    // 保持进程运行
+    process.on('SIGINT', async () => {
+      console.log('\n正在关闭...');
+      process.exit(0);
+    });
+
+    return;
+  }
+
+  // 默认：启动 REPL
   // CLI 欢迎信息（保留，这是用户可见的输出）
   console.log('\n  \x1b[33m✦ Karma 命理师 ✦\x1b[0m\n');
 

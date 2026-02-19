@@ -8,7 +8,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 // ===== 日志模块 =====
 
-export type LogModule = 'system' | 'agent' | 'storage' | 'platform' | 'session' | 'persona';
+export type LogModule = 'system' | 'agent' | 'storage' | 'platform' | 'session' | 'persona' | 'api-server';
 
 // ===== 日志上下文 =====
 
