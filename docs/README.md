@@ -15,6 +15,7 @@
 
 - **[mvp-plan.md](./mvp-plan.md)** - MVP 计划
 - **[next-iteration-plan.md](./next-iteration-plan.md)** - 下一步迭代计划
+- **[karma-simulator-guide.md](./karma-simulator-guide.md)** - 自动化测试指南（Agent-to-Agent）
 
 ## 归档文档
 
@@ -46,7 +47,8 @@
 
 ### 开发计划
 1. 看 [next-iteration-plan.md](./next-iteration-plan.md)
-2. 看 `archive/phase7-integration-plan.md` 了解已完成的工作
+2. 看 [karma-simulator-guide.md](./karma-simulator-guide.md) 了解自动化测试
+3. 看 `archive/phase7-integration-plan.md` 了解已完成的工作
 
 ---
 
