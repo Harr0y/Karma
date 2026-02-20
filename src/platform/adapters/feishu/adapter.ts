@@ -52,7 +52,6 @@ export class FeishuAdapter implements PlatformAdapter {
     this.wsClient = new lark.WSClient({
       appId: this.config.appId,
       appSecret: this.config.appSecret,
-      appType: lark.AppType.SelfBuild,
       domain: lark.Domain.Lark,
     });
 
@@ -64,7 +63,6 @@ export class FeishuAdapter implements PlatformAdapter {
 
     await this.wsClient.start({
       eventDispatcher,
-      logger: new lark.Logger({ level: lark.LoggerLevel.INFO }),
     });
 
     this.running = true;

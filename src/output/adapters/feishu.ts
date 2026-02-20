@@ -76,7 +76,7 @@ export class FeishuOutputAdapter implements OutputAdapter {
     const text = this.buffer.join('');
     this.buffer = [];
 
-    this.pendingFlush = this.platformAdapter.sendMessage(this.chatId, text);
+    this.pendingFlush = this.platformAdapter.sendMessage(this.chatId, text).then(() => {});
     await this.pendingFlush;
     this.pendingFlush = null;
 

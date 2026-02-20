@@ -4,7 +4,6 @@ import * as lark from '@larksuiteoapi/node-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as crypto from 'crypto';
 
 /**
  * 飞书文件处理器
@@ -23,14 +22,14 @@ export class FeishuFileHandler {
     const tmpPath = this.saveToTemp(imageBuffer, fileName || 'image.png');
 
     try {
-      const response = await this.client.im.image.resources.put({
+      const response = await this.client.im.image.create({
         data: {
           image_type: 'message',
           image: fs.createReadStream(tmpPath),
         },
       });
 
-      return response.data?.image_key || '';
+      return response?.image_key || '';
     } finally {
       this.cleanup(tmpPath);
     }
@@ -55,17 +54,15 @@ export class FeishuFileHandler {
     const tmpPath = this.saveToTemp(fileBuffer, fileName);
 
     try {
-      const response = await this.client.drive.files.upload({
+      const response = await this.client.im.file.create({
         data: {
+          file_type: 'stream',
           file_name: fileName,
-          file_size: fileBuffer.length,
-          block_size: fileBuffer.length,
-          block_sha1: this.calculateSha1(fileBuffer),
+          file: fs.createReadStream(tmpPath),
         },
-        file: fs.createReadStream(tmpPath),
       });
 
-      return response.data?.file_token || '';
+      return response?.file_key || '';
     } finally {
       this.cleanup(tmpPath);
     }
@@ -90,7 +87,7 @@ export class FeishuFileHandler {
     const tmpPath = this.saveToTemp(mediaBuffer, fileName);
 
     try {
-      const response = await this.client.im.file.resources.put({
+      const response = await this.client.im.file.create({
         data: {
           file_type: 'stream',
           file_name: fileName,
@@ -98,7 +95,7 @@ export class FeishuFileHandler {
         },
       });
 
-      return response.data?.file_key || '';
+      return response?.file_key || '';
     } finally {
       this.cleanup(tmpPath);
     }
@@ -119,21 +116,16 @@ export class FeishuFileHandler {
    * 下载文件
    */
   async downloadFile(fileKey: string): Promise<string> {
-    const response = await this.client.im.file.resources.get({
+    const response = await this.client.im.file.get({
       path: { file_key: fileKey },
     });
 
-    const chunks: Buffer[] = [];
-    for await (const chunk of response) {
-      if (Buffer.isBuffer(chunk)) {
-        chunks.push(chunk);
-      }
-    }
-
-    const buffer = Buffer.concat(chunks);
+    // Create temp file path
     const tmpPath = path.join(os.tmpdir(), 'karma-feishu', fileKey);
     fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
-    fs.writeFileSync(tmpPath, buffer);
+
+    // Write file using SDK helper
+    await response.writeFile(tmpPath);
 
     return tmpPath;
   }
@@ -162,12 +154,5 @@ export class FeishuFileHandler {
     } catch {
       // Ignore cleanup errors
     }
-  }
-
-  /**
-   * 计算 SHA1
-   */
-  private calculateSha1(buffer: Buffer): string {
-    return crypto.createHash('sha1').update(buffer).digest('hex');
   }
 }
