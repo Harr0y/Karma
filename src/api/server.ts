@@ -11,6 +11,7 @@ import { AgentRunner } from '../agent/index.js';
 import { PersonaService } from '../persona/index.js';
 import { getConfig } from '../config/index.js';
 import { getLogger, setLogger, createLogger, type Logger } from '../logger/index.js';
+import { HttpAdapter } from '../platform/adapters/http/index.js';
 import type { ActiveSession } from '../session/types.js';
 import type {
   CreateSessionRequest,
@@ -30,6 +31,9 @@ export interface ServerConfig {
 const GREETING_PROMPT =
   '一位新的客人到来了。请按照你的方法论开始接待。简单直接地向客人打招呼，请他们把生辰时间、性别和出生地发给你。不要搞仪式感，像真师傅一样随意自然。';
 
+// 空响应兜底消息
+const EMPTY_RESPONSE_FALLBACK = '嗯，请继续说...';
+
 export class KarmaServer {
   private config: ReturnType<typeof getConfig>;
   private storage: StorageService;
@@ -38,6 +42,7 @@ export class KarmaServer {
   private personaService: PersonaService;
   private logger: Logger;
   private server?: http.Server;
+  private httpAdapter: HttpAdapter;
 
   constructor(serverConfig?: ServerConfig) {
     // 初始化 Logger
@@ -66,6 +71,9 @@ export class KarmaServer {
       soulPath: join(process.cwd(), 'SOUL.md'),
       storage: this.storage,
     });
+
+    // 初始化 HTTP 适配器
+    this.httpAdapter = new HttpAdapter();
 
     // Runner 稍后在 async init 中创建（因为需要加载 skills）
     this.runner = null as any;
@@ -194,8 +202,8 @@ export class KarmaServer {
     const body = await this.readBody(req);
     const request: CreateSessionRequest = body ? JSON.parse(body) : {};
 
-    const platform = request.metadata?.platform || 'api';
-    const externalChatId = request.userId || `api-${Date.now()}`;
+    const platform = 'http';  // HTTP API 固定使用 http 平台
+    const externalChatId = request.userId || `http-${Date.now()}`;
 
     const session = await this.sessionManager.getOrCreateSession({
       platform: platform as any,
@@ -234,27 +242,21 @@ export class KarmaServer {
       return;
     }
 
-    // 获取会话
-    const dbSession = await this.storage.getSession(request.sessionId);
-    if (!dbSession) {
-      this.sendError(res, 404, 'NOT_FOUND', 'Session not found');
-      return;
+    // 使用无状态会话策略获取会话
+    let session: ActiveSession;
+    try {
+      session = await this.sessionManager.getOrCreateSession({
+        platform: 'http',
+        sessionId: request.sessionId,
+        externalChatId: request.sessionId,
+      });
+    } catch (err: any) {
+      if (err.message?.includes('Session not found')) {
+        this.sendError(res, 404, 'NOT_FOUND', 'Session not found');
+        return;
+      }
+      throw err;
     }
-
-    // 构造 ActiveSession
-    const session: ActiveSession = {
-      id: dbSession.id,
-      clientId: dbSession.clientId ?? undefined,
-      sdkSessionId: dbSession.sdkSessionId ?? undefined,
-      platform: dbSession.platform as any,
-      externalChatId: dbSession.externalChatId ?? undefined,
-      startedAt: new Date(dbSession.startedAt),
-    };
-
-    // 更新内存缓存
-    const cacheKey = `${session.platform}:${session.externalChatId || session.platform}`;
-    this.sessionManager.getSessionFromCache(cacheKey) ||
-      (this.sessionManager as any).activeSessions?.set(cacheKey, session);
 
     // 设置 SSE headers
     res.writeHead(200, {
@@ -283,12 +285,23 @@ export class KarmaServer {
       }
 
       // 正常对话
+      let hasContent = false;
       for await (const msg of this.runner.run({ userInput: request.message, session })) {
         if (msg.type === 'text') {
+          hasContent = true;
           sendSSE({ type: 'text', content: msg.content });
-        } else if (msg.type === 'tool_use') {
-          sendSSE({ type: 'tool_use', toolName: msg.content });
         }
+        // 移除 tool_use 的发送，不暴露给用户
+      }
+
+      // 空响应处理（修复 P1 问题）
+      if (!hasContent) {
+        sendSSE({ type: 'text', content: EMPTY_RESPONSE_FALLBACK });
+        this.logger.warn('空响应', {
+          operation: 'empty_response',
+          sessionId: session.id,
+          metadata: { userInput: request.message.substring(0, 50) },
+        });
       }
 
       sendSSE({ type: 'done' });

@@ -304,7 +304,7 @@ export class AgentRunner {
           clientId = existingClient.id;
           // 更新客户的最后访问时间和会话计数
           await storage.updateClient(clientId, {
-            sessionCount: existingClient.sessionCount + 1,
+            sessionCount: (existingClient.sessionCount ?? 0) + 1,
             name: info!.name || existingClient.name,
             currentCity: info!.currentCity || existingClient.currentCity,
           });
@@ -332,22 +332,30 @@ export class AgentRunner {
 
       // 更新会话关联
       session.clientId = clientId;
-      // 注意：这里需要在 session 表中也更新 clientId
-      // 暂时通过 storage 直接更新
-      await storage.updateSdkSessionId(session.id, session.sdkSessionId || '');
+      // 持久化 clientId 到数据库
+      await sessionManager.updateSessionClient(session.id, clientId);
+      this.logger.debug('会话关联客户', {
+        operation: 'session_client_link',
+        sessionId: session.id,
+        clientId,
+      });
     } else {
-      // 已有客户，更新信息
-      await storage.updateClient(session.clientId, {
-        name: info!.name,
-        gender: info!.gender,
-        birthDate: info!.birthDate,
-        birthPlace: info!.birthPlace,
-        currentCity: info!.currentCity,
-      });
-      this.logger.debug('更新客户信息', {
-        operation: 'client_update',
-        clientId: session.clientId,
-      });
+      // 已有客户，更新信息（只更新非 undefined 字段，避免覆盖已有值）
+      const updateData: Record<string, unknown> = {};
+      if (info!.name) updateData.name = info!.name;
+      if (info!.gender) updateData.gender = info!.gender;
+      if (info!.birthDate) updateData.birthDate = info!.birthDate;
+      if (info!.birthPlace) updateData.birthPlace = info!.birthPlace;
+      if (info!.currentCity) updateData.currentCity = info!.currentCity;
+
+      if (Object.keys(updateData).length > 0) {
+        await storage.updateClient(session.clientId, updateData);
+        this.logger.debug('更新客户信息', {
+          operation: 'client_update',
+          clientId: session.clientId,
+          metadata: { fields: Object.keys(updateData) },
+        });
+      }
     }
   }
 }
