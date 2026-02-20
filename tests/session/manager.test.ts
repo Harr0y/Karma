@@ -114,12 +114,13 @@ describe('SessionManager', () => {
   describe('updateSdkSessionId', () => {
     it('should update SDK session ID', async () => {
       const session = await manager.getOrCreateSession({
-        platform: 'cli',
+        platform: 'feishu',
+        externalChatId: 'oc_sdk_test',
       });
 
       await manager.updateSdkSessionId(session.id, 'sdk_abc123');
 
-      const cached = manager.getSessionFromCache('cli:cli');
+      const cached = manager.getSessionFromCache('feishu:oc_sdk_test');
       expect(cached?.sdkSessionId).toBe('sdk_abc123');
     });
 
@@ -136,12 +137,12 @@ describe('SessionManager', () => {
     it('should update SDK session ID for Feishu session', async () => {
       const session = await manager.getOrCreateSession({
         platform: 'feishu',
-        externalChatId: 'oc_sdk_test',
+        externalChatId: 'oc_sdk_test2',
       });
 
       await manager.updateSdkSessionId(session.id, 'sdk_feishu_001');
 
-      const cached = manager.getSessionFromCache('feishu:oc_sdk_test');
+      const cached = manager.getSessionFromCache('feishu:oc_sdk_test2');
       expect(cached?.sdkSessionId).toBe('sdk_feishu_001');
     });
   });
@@ -153,13 +154,89 @@ describe('SessionManager', () => {
       });
 
       const session = await manager.getOrCreateSession({
-        platform: 'cli',
+        platform: 'feishu',
+        externalChatId: 'oc_link_test',
       });
 
       await manager.linkClient(session.id, clientId);
 
-      const cached = manager.getSessionFromCache('cli:cli');
+      const cached = manager.getSessionFromCache('feishu:oc_link_test');
       expect(cached?.clientId).toBe(clientId);
+    });
+  });
+
+  describe('updateSessionClient', () => {
+    it('should update client and persist to database', async () => {
+      // 测试 P1 问题修复：clientId 持久化
+      const clientId = await storage.createClient({ name: '测试客户' });
+      const session = await manager.getOrCreateSession({
+        platform: 'feishu',
+        externalChatId: 'oc_update_test',
+      });
+
+      await manager.updateSessionClient(session.id, clientId);
+
+      // 验证缓存更新
+      const cached = manager.getSessionFromCache('feishu:oc_update_test');
+      expect(cached?.clientId).toBe(clientId);
+
+      // 验证数据库持久化
+      const dbSession = await storage.getSession(session.id);
+      expect(dbSession?.clientId).toBe(clientId);
+    });
+  });
+
+  describe('HTTP 无状态会话', () => {
+    it('should restore session by sessionId for HTTP platform', async () => {
+      // 创建一个 HTTP 会话
+      const session1 = await manager.getOrCreateSession({
+        platform: 'http',
+        externalChatId: 'http-test-1',
+      });
+
+      // 清除缓存
+      manager.clearCache();
+
+      // 通过 sessionId 恢复
+      const session2 = await manager.getOrCreateSession({
+        platform: 'http',
+        sessionId: session1.id,
+      });
+
+      expect(session2.id).toBe(session1.id);
+    });
+
+    it('should throw error if sessionId not found', async () => {
+      await expect(
+        manager.getOrCreateSession({
+          platform: 'http',
+          sessionId: 'non-existent-session',
+        })
+      ).rejects.toThrow('Session not found');
+    });
+
+    it('should cache restored session', async () => {
+      const session1 = await manager.getOrCreateSession({
+        platform: 'http',
+        externalChatId: 'http-cache-test',
+      });
+
+      manager.clearCache();
+
+      // 恢复后应该被缓存
+      const session2 = await manager.getOrCreateSession({
+        platform: 'http',
+        sessionId: session1.id,
+      });
+
+      // 再次获取应该从缓存获取
+      const session3 = await manager.getOrCreateSession({
+        platform: 'http',
+        sessionId: session1.id,
+      });
+
+      expect(session2.id).toBe(session1.id);
+      expect(session3.id).toBe(session1.id);
     });
   });
 

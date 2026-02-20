@@ -100,6 +100,48 @@ describe('StorageService', () => {
 
         expect(after?.lastSeenAt > before?.lastSeenAt!).toBe(true);
       });
+
+      it('should NOT overwrite existing fields with undefined', async () => {
+        // 测试 P2 问题修复：updateClient 不覆盖 undefined 字段
+        const id = await storage.createClient({
+          name: '张三',
+          gender: 'male',
+          birthPlace: '上海',
+        });
+
+        // 只更新 name，不传入 gender 和 birthPlace
+        await storage.updateClient(id, {
+          name: '李四',
+          // gender 和 birthPlace 是 undefined，不应覆盖
+        });
+
+        const client = await storage.getClient(id);
+        expect(client?.name).toBe('李四');
+        expect(client?.gender).toBe('male');  // 应该保持不变
+        expect(client?.birthPlace).toBe('上海');  // 应该保持不变
+      });
+
+      it('should only update non-undefined fields', async () => {
+        const id = await storage.createClient({
+          name: '测试',
+          gender: 'female',
+          currentCity: '北京',
+        });
+
+        // 传入部分 undefined 字段
+        await storage.updateClient(id, {
+          name: '新名字',
+          gender: undefined,
+          birthDate: '1990-01-01',
+          currentCity: undefined,
+        });
+
+        const client = await storage.getClient(id);
+        expect(client?.name).toBe('新名字');
+        expect(client?.gender).toBe('female');  // undefined 不覆盖
+        expect(client?.birthDate).toBe('1990-01-01');  // 有值才更新
+        expect(client?.currentCity).toBe('北京');  // undefined 不覆盖
+      });
     });
   });
 
@@ -180,6 +222,31 @@ describe('StorageService', () => {
 
         const found = await storage.getSessionBySdkId('sdk_xyz789');
         expect(found?.id).toBe(sessionId);
+      });
+    });
+
+    describe('updateSessionClient', () => {
+      it('should update client_id for session', async () => {
+        // 测试 P1 问题修复：clientId 持久化
+        const sessionId = await storage.createSession({ platform: 'http' });
+        const newClientId = await storage.createClient({ name: '新客户' });
+
+        await storage.updateSessionClient(sessionId, newClientId);
+
+        const session = await storage.getSession(sessionId);
+        expect(session?.clientId).toBe(newClientId);
+      });
+
+      it('should allow updating client_id multiple times', async () => {
+        const sessionId = await storage.createSession({ platform: 'http' });
+        const clientId1 = await storage.createClient({ name: '客户1' });
+        const clientId2 = await storage.createClient({ name: '客户2' });
+
+        await storage.updateSessionClient(sessionId, clientId1);
+        await storage.updateSessionClient(sessionId, clientId2);
+
+        const session = await storage.getSession(sessionId);
+        expect(session?.clientId).toBe(clientId2);
       });
     });
 
