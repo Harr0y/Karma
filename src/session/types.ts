@@ -1,6 +1,13 @@
 // Session Manager Types
 
-export type Platform = 'cli' | 'feishu' | 'discord' | 'telegram';
+// 从统一类型定义导入 Platform 类型
+import type { Platform } from '../types/platform.js';
+export type { Platform } from '../types/platform.js';
+export {
+  getPlatformConfig,
+  isStatelessPlatform,
+  isPersistentPlatform,
+} from '../types/platform.js';
 
 export interface ActiveSession {
   id: string;
@@ -31,6 +38,8 @@ export interface GetOrCreateSessionContext {
   platform: Platform;
   externalChatId?: string;
   clientId?: string;
+  /** 无状态平台（如 HTTP）使用的 sessionId */
+  sessionId?: string;
 }
 
 export interface SessionManagerOptions {

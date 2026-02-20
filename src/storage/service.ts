@@ -163,10 +163,16 @@ export class StorageService {
   }
 
   async updateClient(id: string, data: Partial<Omit<Client, 'id' | 'firstSeenAt'>>): Promise<void> {
-    const updateData = {
-      ...data,
+    // 过滤掉 undefined 字段，避免覆盖已有值
+    const updateData: Record<string, unknown> = {
       lastSeenAt: new Date().toISOString(),
     };
+
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        updateData[key] = value;
+      }
+    }
 
     await this.drizzleDb
       .update(clients)
@@ -237,6 +243,17 @@ export class StorageService {
     await this.drizzleDb
       .update(sessions)
       .set({ sdkSessionId })
+      .where(eq(sessions.id, sessionId));
+  }
+
+  /**
+   * 更新会话关联的客户 ID
+   * 修复 P1 问题：clientId 持久化
+   */
+  async updateSessionClient(sessionId: string, clientId: string): Promise<void> {
+    await this.drizzleDb
+      .update(sessions)
+      .set({ clientId })
       .where(eq(sessions.id, sessionId));
   }
 

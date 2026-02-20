@@ -1,8 +1,8 @@
 // Session Manager - 管理多平台会话
 
 import type { StorageService } from '@/storage/service.js';
-import type { ActiveSession, GetOrCreateSessionContext, Platform, SessionIdentity } from './types.js';
-import { getSessionKey } from './types.js';
+import type { ActiveSession, GetOrCreateSessionContext, SessionIdentity } from './types.js';
+import { getSessionKey, isStatelessPlatform, isPersistentPlatform, type Platform } from './types.js';
 
 // Re-export for convenience
 export { getSessionKey } from './types.js';
@@ -35,33 +35,52 @@ export class SessionManager {
 
   /**
    * 获取或创建会话
-   * 1. 先从内存缓存获取
-   * 2. 再从数据库恢复
-   * 3. 最后创建新会话
+   *
+   * 根据平台类型选择不同的会话恢复策略：
+   * - 无状态平台（HTTP）：通过 sessionId 从数据库恢复
+   * - 长连接平台（Feishu/Discord/Telegram）：优先内存缓存
    */
   async getOrCreateSession(context: GetOrCreateSessionContext): Promise<ActiveSession> {
-    const { platform, externalChatId, clientId } = context;
+    const { platform, externalChatId, sessionId } = context;
+
+    // 根据平台类型选择策略
+    if (isStatelessPlatform(platform) && sessionId) {
+      // 无状态平台：通过 sessionId 恢复
+      return this.getStatelessSession(context);
+    } else if (isPersistentPlatform(platform)) {
+      // 长连接平台：优先内存缓存
+      return this.getPersistentSession(context);
+    }
+
+    // 默认：创建新会话
+    return this.createNewSession(context);
+  }
+
+  /**
+   * 长连接平台会话处理
+   * 优先内存缓存，再查数据库
+   */
+  private async getPersistentSession(context: GetOrCreateSessionContext): Promise<ActiveSession> {
+    const { platform, externalChatId } = context;
     const cacheKey = this.getCacheKey(platform, externalChatId);
 
-    // 检查是否有正在进行的请求，避免并发创建
+    // 检查并发锁
     const pendingRequest = this.sessionLocks.get(cacheKey);
     if (pendingRequest) {
       return pendingRequest;
     }
 
-    // 创建新的请求 Promise
-    const requestPromise = this._doGetOrCreateSession(context, cacheKey);
+    const requestPromise = this._doGetPersistentSession(context, cacheKey);
     this.sessionLocks.set(cacheKey, requestPromise);
 
     try {
-      const session = await requestPromise;
-      return session;
+      return await requestPromise;
     } finally {
       this.sessionLocks.delete(cacheKey);
     }
   }
 
-  private async _doGetOrCreateSession(
+  private async _doGetPersistentSession(
     context: GetOrCreateSessionContext,
     cacheKey: string
   ): Promise<ActiveSession> {
@@ -73,26 +92,59 @@ export class SessionManager {
       return cached;
     }
 
-    // 2. 尝试从数据库恢复 (仅 Feishu 等有 externalChatId 的平台)
-    // 使用复合键查询：platform:chatId
+    // 2. 尝试从数据库恢复
     if (externalChatId) {
       const dbSession = await this.storage.getSessionByExternalChatId(platform, externalChatId);
       if (dbSession && dbSession.status === 'active') {
-        const activeSession: ActiveSession = {
-          id: dbSession.id,
-          clientId: dbSession.clientId ?? undefined,
-          sdkSessionId: dbSession.sdkSessionId ?? undefined,
-          platform: dbSession.platform as Platform,
-          externalChatId: dbSession.externalChatId ?? undefined,
-          startedAt: new Date(dbSession.startedAt),
-        };
-        // 使用复合键缓存
-        this.activeSessions.set(cacheKey, activeSession);
-        return activeSession;
+        const session = this.dbToActiveSession(dbSession);
+        this.activeSessions.set(cacheKey, session);
+        return session;
       }
     }
 
     // 3. 创建新会话
+    return this.createNewSession(context);
+  }
+
+  /**
+   * 无状态平台会话处理
+   * 通过 sessionId 从数据库恢复
+   */
+  private async getStatelessSession(context: GetOrCreateSessionContext): Promise<ActiveSession> {
+    const { platform, sessionId } = context;
+
+    if (!sessionId) {
+      throw new Error('sessionId is required for stateless platforms');
+    }
+
+    // 1. 先检查内存缓存（可能在同一进程中）
+    for (const session of this.activeSessions.values()) {
+      if (session.id === sessionId) {
+        return session;
+      }
+    }
+
+    // 2. 从数据库恢复
+    const dbSession = await this.storage.getSession(sessionId);
+    if (!dbSession) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const session = this.dbToActiveSession(dbSession);
+
+    // 缓存（用于后续请求）
+    const cacheKey = this.getCacheKey(platform, session.externalChatId || session.id);
+    this.activeSessions.set(cacheKey, session);
+
+    return session;
+  }
+
+  /**
+   * 创建新会话
+   */
+  private async createNewSession(context: GetOrCreateSessionContext): Promise<ActiveSession> {
+    const { platform, externalChatId, clientId } = context;
+
     const sessionId = await this.storage.createSession({
       platform,
       externalChatId,
@@ -107,8 +159,10 @@ export class SessionManager {
       startedAt: new Date(),
     };
 
-    // 使用复合键缓存
+    // 缓存（使用 platform 作为默认 chatId）
+    const cacheKey = this.getCacheKey(platform, externalChatId);
     this.activeSessions.set(cacheKey, newSession);
+
     return newSession;
   }
 
@@ -129,18 +183,28 @@ export class SessionManager {
   }
 
   /**
-   * 关联客户到会话
+   * 更新会话关联的客户 ID
+   * 修复 P1 问题：clientId 持久化
    */
-  async linkClient(sessionId: string, clientId: string): Promise<void> {
+  async updateSessionClient(sessionId: string, clientId: string): Promise<void> {
+    // 更新数据库
+    await this.storage.updateSessionClient(sessionId, clientId);
+
     // 更新缓存
-    for (const [key, session] of this.activeSessions.entries()) {
+    for (const session of this.activeSessions.values()) {
       if (session.id === sessionId) {
         session.clientId = clientId;
-        // 注意：当前 Storage 不支持更新会话的 clientId
-        // 如果需要，可以添加 updateSessionClient 方法
         break;
       }
     }
+  }
+
+  /**
+   * 关联客户到会话（别名方法）
+   * @deprecated 请使用 updateSessionClient
+   */
+  async linkClient(sessionId: string, clientId: string): Promise<void> {
+    return this.updateSessionClient(sessionId, clientId);
   }
 
   /**
@@ -175,5 +239,19 @@ export class SessionManager {
    */
   clearCache(): void {
     this.activeSessions.clear();
+  }
+
+  /**
+   * 数据库记录转 ActiveSession
+   */
+  private dbToActiveSession(dbSession: any): ActiveSession {
+    return {
+      id: dbSession.id,
+      clientId: dbSession.clientId ?? undefined,
+      sdkSessionId: dbSession.sdkSessionId ?? undefined,
+      platform: dbSession.platform as Platform,
+      externalChatId: dbSession.externalChatId ?? undefined,
+      startedAt: new Date(dbSession.startedAt),
+    };
   }
 }

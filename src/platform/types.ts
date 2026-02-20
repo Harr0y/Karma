@@ -1,9 +1,15 @@
 // Platform Types - 平台适配器接口定义
 
-/**
- * 平台标识
- */
-export type Platform = 'cli' | 'feishu' | 'discord' | 'telegram';
+// 从统一类型定义导入 Platform 类型
+import type { Platform } from '../types/platform.js';
+export type { Platform } from '../types/platform.js';
+
+// Re-export platform utilities
+export {
+  getPlatformConfig,
+  isStatelessPlatform,
+  isPersistentPlatform,
+} from '../types/platform.js';
 
 /**
  * 统一的消息结构
@@ -110,9 +116,10 @@ export interface PlatformAdapter {
 }
 
 /**
- * 平台配置
+ * 平台适配器配置（运行时配置）
+ * 注意：平台特性配置请使用 getPlatformConfig() 获取
  */
-export interface PlatformConfig {
+export interface AdapterConfig {
   enabled: boolean;
   [key: string]: unknown;
 }
