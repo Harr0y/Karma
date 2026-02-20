@@ -57,10 +57,11 @@ export class HistoryExtractor {
     const parts: string[] = [];
 
     // 老客户
-    if (client && client.sessionCount >= 3) {
-      parts.push(`这是第 ${client.sessionCount} 次来咨询的老客户，可以更直接、更深入。`);
-    } else if (client && client.sessionCount >= 2) {
-      parts.push(`这是第 ${client.sessionCount} 次来咨询。`);
+    const sessionCount = client?.sessionCount ?? 0;
+    if (client && sessionCount >= 3) {
+      parts.push(`这是第 ${sessionCount} 次来咨询的老客户，可以更直接、更深入。`);
+    } else if (client && sessionCount >= 2) {
+      parts.push(`这是第 ${sessionCount} 次来咨询。`);
     }
 
     // 姓名已知

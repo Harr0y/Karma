@@ -2,6 +2,9 @@
 
 import type { Client } from '@/storage/schema.js';
 
+// Re-export Client for convenience
+export type { Client } from '@/storage/schema.js';
+
 // ===== 历史特征 =====
 
 export interface HistoryFeatures {

@@ -18,7 +18,27 @@ export interface LogContext {
   sessionId?: string;
   clientId?: string;
   traceId?: string;
+  duration?: number;
   metadata?: Record<string, unknown>;
+}
+
+// ===== 程序日志条目 =====
+
+export interface ProgramLogEntry {
+  timestamp: string;
+  level: LogLevel;
+  message: string;
+  module: LogModule;
+  operation?: string;
+  sessionId?: string;
+  clientId?: string;
+  traceId?: string;
+  metadata?: Record<string, unknown>;
+  error?: {
+    name: string;
+    message: string;
+    stack?: string;
+  };
 }
 
 // ===== Logger 接口 =====
