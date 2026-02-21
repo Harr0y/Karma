@@ -29,17 +29,17 @@ export async function buildSystemPrompt(
   // 1. 时间锚点 (必须)
   parts.push(buildTimeAnchor(context.now));
 
-  // 2. 人设 (可从 SOUL.md 加载)
+  // 2. 人设 (可从 SOUL.md 加载或外置文件)
   parts.push(await buildPersona(context.personaConfig));
 
-  // 3. 八字框架 (核心方法)
+  // 3. 八字框架 (核心方法，现在是 async)
   if (includeBazi) {
-    parts.push(buildBaziFramework());
+    parts.push(await buildBaziFramework());
   }
 
-  // 4. 冷读引擎
+  // 4. 冷读引擎 (现在是 async)
   if (includeColdReading) {
-    parts.push(buildColdReadingEngine());
+    parts.push(await buildColdReadingEngine());
   }
 
   // 5. Skills 索引 (动态)
@@ -53,17 +53,17 @@ export async function buildSystemPrompt(
     parts.push(context.clientProfile);
   }
 
-  // 7. 平台规则
-  parts.push(buildPlatformRules(context.platform));
+  // 7. 平台规则 (现在是 async)
+  parts.push(await buildPlatformRules(context.platform));
 
   // 8. 工具使用指南
   if (includeToolGuidelines) {
     parts.push(buildToolGuidelines());
   }
 
-  // 9. 输出格式规则
+  // 9. 输出格式规则 (现在是 async)
   if (includeOutputRules) {
-    parts.push(buildOutputRules());
+    parts.push(await buildOutputRules());
   }
 
   return parts.join('\n\n');

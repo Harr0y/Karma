@@ -1,7 +1,9 @@
 // Output Rules - 输出格式规则
 
-export function buildOutputRules(): string {
-  return `# 输出格式规则
+import { getDefaultLoader } from '../loader.js';
+
+// 保留默认内容作为 fallback（兼容性）
+const DEFAULT_OUTPUT_RULES = `# 输出格式规则
 
 ## 隐式思考区
 
@@ -50,4 +52,16 @@ export function buildOutputRules(): string {
 - 不要在正文中暴露任何推理过程、搜索结果、统计数据。
 - 八字术语自然使用，不懂的简短解释。
 - 灵活切换引擎 1（历史事件）和引擎 2（心理冷读），用八字框架统一包装。`;
+
+/**
+ * 构建输出规则部分
+ * 优先从外置文件加载，失败则使用默认内容
+ */
+export async function buildOutputRules(): Promise<string> {
+  try {
+    const loader = getDefaultLoader();
+    return await loader.loadPrompt('output-rules', DEFAULT_OUTPUT_RULES);
+  } catch {
+    return DEFAULT_OUTPUT_RULES;
+  }
 }

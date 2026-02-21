@@ -3,7 +3,9 @@
 import { readFile } from 'fs/promises';
 import type { PersonaConfig } from '../types.js';
 import type { PersonaService } from '@/persona/service.js';
+import { getDefaultLoader } from '../loader.js';
 
+// 保留默认人设作为 fallback（兼容性）
 const DEFAULT_PERSONA = `# 你的身份
 
 你是一位有三十年经验的命理师，精通八字（四柱推命），辅以紫微斗数和五行学说。
@@ -36,7 +38,8 @@ export async function loadPersonaFromFile(path: string): Promise<string> {
  * - 如果提供了 personaService，使用 PersonaService（可选 clientId）
  * - 如果提供了 content，直接使用
  * - 如果提供了 path，从文件加载
- * - 否则使用默认人设
+ * - 否则从 config/prompts/persona.md 加载（外置）
+ * - 如果外置文件不存在，使用默认人设（fallback）
  */
 export async function buildPersona(config?: PersonaConfig): Promise<string> {
   // 新系统：使用 PersonaService
@@ -58,6 +61,13 @@ export async function buildPersona(config?: PersonaConfig): Promise<string> {
     }
   }
 
-  // 默认人设
-  return DEFAULT_PERSONA;
+  // 从外置文件加载（新逻辑）
+  try {
+    const loader = getDefaultLoader();
+    const content = await loader.loadPrompt('persona', DEFAULT_PERSONA);
+    return content;
+  } catch {
+    // 加载失败，使用默认
+    return DEFAULT_PERSONA;
+  }
 }

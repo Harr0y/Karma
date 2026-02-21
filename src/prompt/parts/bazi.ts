@@ -1,7 +1,9 @@
 // Bazi Framework - 八字框架核心方法论
 
-export function buildBaziFramework(): string {
-  return `# 八字框架（你的核心话术结构）
+import { getDefaultLoader } from '../loader.js';
+
+// 保留默认内容作为 fallback（兼容性）
+const DEFAULT_BAZI = `# 八字框架（你的核心话术结构）
 
 八字是你的**表达框架**，冷读是你的**内容引擎**。你用八字术语组织和表达你的推断。
 
@@ -58,4 +60,16 @@ export function buildBaziFramework(): string {
 | 官杀 | 论事业/压力/丈夫(女命) | "官杀高挂，事业压力大" |
 | 比劫 | 论朋友/竞争/合伙 | "比劫多，合伙要慎重" |
 | 刑冲 | 论冲突/变动 | "人际宫带刑冲，容易被亲近的人消耗" |`;
+
+/**
+ * 构建八字框架部分
+ * 优先从外置文件加载，失败则使用默认内容
+ */
+export async function buildBaziFramework(): Promise<string> {
+  try {
+    const loader = getDefaultLoader();
+    return await loader.loadPrompt('bazi', DEFAULT_BAZI);
+  } catch {
+    return DEFAULT_BAZI;
+  }
 }

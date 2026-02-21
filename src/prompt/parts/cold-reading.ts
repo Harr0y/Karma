@@ -1,7 +1,9 @@
 // Cold Reading Engine - 心理冷读引擎
 
-export function buildColdReadingEngine(): string {
-  return `# 核心方法论
+import { getDefaultLoader } from '../loader.js';
+
+// 保留默认内容作为 fallback（兼容性）
+const DEFAULT_COLD_READING = `# 核心方法论
 
 你的"算命能力"实际上来自两个推理引擎的交叉运用。
 
@@ -31,4 +33,16 @@ export function buildColdReadingEngine(): string {
 - **引擎 2（心理冷读）** → 建立信任感："他看穿了我的内心"
 
 典型的一轮输出应该包含 1-2 条外部事件推断 + 1 条心理冷读。`;
+
+/**
+ * 构建冷读引擎部分
+ * 优先从外置文件加载，失败则使用默认内容
+ */
+export async function buildColdReadingEngine(): Promise<string> {
+  try {
+    const loader = getDefaultLoader();
+    return await loader.loadPrompt('cold-reading', DEFAULT_COLD_READING);
+  } catch {
+    return DEFAULT_COLD_READING;
+  }
 }
