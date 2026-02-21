@@ -21,7 +21,7 @@ describe('buildPlatformRules', () => {
     const result = await buildPlatformRules('wechat');
 
     expect(result).toContain('WeChat');
-    expect(result).toContain('消息长度');
+    expect(result).toMatch(/length|limited|分段/i);
   });
 
   it('should return empty string for unknown platform', async () => {
@@ -34,12 +34,12 @@ describe('buildPlatformRules', () => {
     const result = await buildPlatformRules('feishu');
 
     // Feishu 提醒消息长度
-    expect(result).toMatch(/长|短|分段|分条/i);
+    expect(result).toMatch(/long|short|split|length/i);
   });
 
   it('should mention mobile/desktop for Feishu', async () => {
     const result = await buildPlatformRules('feishu');
 
-    expect(result).toMatch(/手机|桌面|mobile|desktop/i);
+    expect(result).toMatch(/mobile|desktop/i);
   });
 });

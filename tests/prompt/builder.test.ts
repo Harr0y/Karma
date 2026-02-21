@@ -166,7 +166,7 @@ describe('buildSystemPrompt', () => {
       platform: 'cli',
     });
 
-    expect(prompt).toContain('# 输出格式规则');
+    expect(prompt).toContain('# Output Format Rules');
   });
 
   it('should exclude output rules when disabled', async () => {
