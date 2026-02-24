@@ -97,8 +97,8 @@ logging:
 pnpm test
 
 # 预期结果
-Test Files  24 passed | 1 failed
-Tests       295 passed | 1 failed
+Test Files  28 passed (28)
+Tests       365 passed (365)
 
 # 启动服务
 pnpm start

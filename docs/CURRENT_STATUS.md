@@ -1,6 +1,6 @@
 # Karma 项目当前状态
 
-> 最后更新：2026-02-19 | Phase 7 已完成
+> 最后更新：2026-02-24 | Phase 7 已完成
 
 ---
 
@@ -10,7 +10,7 @@
 
 - **版本**: 0.1.0
 - **状态**: 生产就绪
-- **测试**: 296 passing (1 minor failure)
+- **测试**: 365 passing ✅
 - **技术栈**: Claude Agent SDK + SQLite + lunar-javascript + 飞书
 
 ---
@@ -101,7 +101,7 @@ PlatformAdapter
 | **Skills** | 100% | 加载器 + 3 个 Skills ✅ |
 | **Prompt Builder** | 100% | 9 个模块化部分 ✅ |
 | **八字工具** | 100% | calculateBazi + 格式化 ✅ |
-| **测试** | 99% | 296 tests (1 minor failure) ⚠️ |
+| **测试** | 100% | 365 tests ✅ |
 | **飞书适配器** | 100% | WebSocket 实现 ✅ |
 
 ### 数据流
@@ -129,37 +129,30 @@ Agent 思考（inner_monologue）
 ### 测试统计
 
 ```
-Test Files  24 passed | 1 failed
-Tests       295 passed | 1 failed
-Duration    ~1.5s
+Test Files  28 passed (28)
+Tests       365 passed (365)
+Duration    ~4s
 ```
 
 ### 测试分布
 
 | 模块 | 测试数 | 状态 |
 |------|--------|------|
-| Storage | 31 | ✅ |
+| Storage | 35 | ✅ |
 | Skills | 39 | ✅ |
-| Prompt | 32 | ✅ |
-| Agent | 49 | ✅ |
-| Persona | 20 | ✅ |
+| Prompt | 48 | ✅ |
+| Agent | 90 | ✅ |
+| Persona | 17 | ✅ |
 | Tools | 10 | ✅ |
-| Integration | 28 | ✅ |
-| Platform | 16 | ✅ |
-| Logger | 17 | ✅ |
+| Integration | 51 | ✅ |
+| Platform | 30 | ✅ |
+| Logger | 10 | ✅ |
 | Output | 11 | ✅ |
-| Session | 20 | ✅ |
-| Runner | 23 | ⚠️ (1 failed) |
+| Session | 24 | ✅ |
 
 ### 已知问题
 
-**失败测试**: `tests/agent/runner.test.ts > should use resume parameter`
-
-**原因**: Karma 使用自己的会话管理（数据库历史），不依赖 SDK resume
-
-**影响**: 无影响（功能正常，测试设计问题）
-
-**解决方案**: 修改测试或删除该测试
+无。所有测试均通过。
 
 ---
 
@@ -269,7 +262,7 @@ karma server --port 3000
 
 ### P0（立即）
 
-- [ ] 修复/删除失败的测试
+- [x] 修复/删除失败的测试 ✅ (2026-02-24)
 - [ ] 真实用户测试 10-20 人
 - [ ] 收集反馈和指标
 
@@ -294,7 +287,7 @@ karma server --port 3000
 1. **数据闭环**：真正实现了"记住客户"（不只是说说）
 2. **个性化**：基于历史数据自动微调
 3. **可追溯**：预测可以追踪验证
-4. **高质量**：296 测试 + 完整错误处理
+4. **高质量**：365 测试 + 完整错误处理
 5. **可扩展**：Skills + Persona 系统
 
 ### 复用价值
@@ -316,6 +309,11 @@ karma server --port 3000
 ---
 
 ## 更新日志
+
+### 2026-02-24
+- ✅ 修复 better-sqlite3 模块版本兼容问题（重新编译）
+- ✅ 所有 365 个测试通过
+- ✅ 文档与代码状态同步
 
 ### 2026-02-19
 - ✅ 完成 Phase 7 数据闭环

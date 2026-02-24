@@ -61,7 +61,13 @@ describe('Logger Integration', () => {
     });
 
     afterEach(async () => {
-      await rm(testDir, { recursive: true, force: true });
+      // 等待文件句柄释放后再删除
+      await new Promise(r => setTimeout(r, 100));
+      try {
+        await rm(testDir, { recursive: true, force: true });
+      } catch {
+        // 忽略删除失败，可能在其他测试中被占用
+      }
     });
 
     it('should write logs to file', async () => {
