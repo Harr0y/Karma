@@ -11,6 +11,13 @@ const DEFAULT_CLI_RULES = `# CLI 平台规则
 - 使用 markdown 格式（表格、列表、代码块）
 - 支持多行输出`;
 
+const DEFAULT_HTTP_RULES = `# HTTP 平台规则
+
+- 输出通过 SSE 流式返回
+- 支持 markdown 格式
+- 长回复不受限制
+- 适合 API 集成场景`;
+
 const DEFAULT_FEISHU_RULES = `# Feishu 平台规则
 
 - 输出会转换为 Feishu 卡片或 markdown
@@ -19,17 +26,26 @@ const DEFAULT_FEISHU_RULES = `# Feishu 平台规则
 - 不支持代码块高亮
 - 用户可能从手机或桌面端访问，注意排版清晰`;
 
-const DEFAULT_WECHAT_RULES = `# WeChat 平台规则
+const DEFAULT_DISCORD_RULES = `# Discord 平台规则
 
-- 消息长度有限制，考虑分段发送
-- 纯文本格式，不支持 markdown
-- 避免复杂表格，使用列表代替
-- 适合短平快的回复风格`;
+- 支持 markdown 格式
+- 消息长度有 2000 字符限制
+- 支持嵌入卡片（Embed）
+- 适合社区场景`;
+
+const DEFAULT_TELEGRAM_RULES = `# Telegram 平台规则
+
+- 支持 markdown 子集
+- 消息长度有 4096 字符限制
+- 支持内联键盘
+- 适合即时通讯场景`;
 
 const DEFAULT_RULES: Record<string, string> = {
   cli: DEFAULT_CLI_RULES,
+  http: DEFAULT_HTTP_RULES,
   feishu: DEFAULT_FEISHU_RULES,
-  wechat: DEFAULT_WECHAT_RULES,
+  discord: DEFAULT_DISCORD_RULES,
+  telegram: DEFAULT_TELEGRAM_RULES,
 };
 
 /**
@@ -37,7 +53,7 @@ const DEFAULT_RULES: Record<string, string> = {
  * 优先从外置文件加载，失败则使用默认内容
  */
 export async function buildPlatformRules(platform: Platform): Promise<string> {
-  const validPlatforms = ['cli', 'feishu', 'wechat'];
+  const validPlatforms = ['cli', 'http', 'feishu', 'discord', 'telegram'];
 
   if (!validPlatforms.includes(platform)) {
     return '';

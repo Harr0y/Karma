@@ -30,7 +30,7 @@
 
 **实现状态**：
 - ✅ Info Extractor（提取结构化信息）
-- ✅ Storage Service（5 张表 + 21 个 CRUD 方法）
+- ✅ Storage Service（5 张表 + 22 个 CRUD 方法）
 - ✅ Agent Runner（自动保存消息和提取信息）
 
 #### 2. Persona 系统
@@ -93,7 +93,7 @@ PlatformAdapter
 
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
-| **Storage** | 100% | 5 张表 + 21 个 CRUD 方法 ✅ |
+| **Storage** | 100% | 5 张表 + 22 个 CRUD 方法 ✅ |
 | **Agent Runner** | 100% | 消息持久化 + 信息提取 ✅ |
 | **Persona** | 100% | SOUL.md + 历史微调 ✅ |
 | **Info Extractor** | 100% | client_info/fact/prediction ✅ |
@@ -130,25 +130,25 @@ Agent 思考（inner_monologue）
 
 ```
 Test Files  28 passed (28)
-Tests       365 passed (365)
-Duration    ~4s
+Tests       368 passed (368)
+Duration    ~2s
 ```
 
 ### 测试分布
 
 | 模块 | 测试数 | 状态 |
 |------|--------|------|
-| Storage | 35 | ✅ |
-| Skills | 39 | ✅ |
-| Prompt | 48 | ✅ |
 | Agent | 90 | ✅ |
-| Persona | 17 | ✅ |
-| Tools | 10 | ✅ |
 | Integration | 51 | ✅ |
+| Prompt | 51 | ✅ |
+| Skills | 39 | ✅ |
+| Storage | 35 | ✅ |
 | Platform | 30 | ✅ |
-| Logger | 10 | ✅ |
-| Output | 11 | ✅ |
 | Session | 24 | ✅ |
+| Persona | 17 | ✅ |
+| Output | 11 | ✅ |
+| Tools | 10 | ✅ |
+| Logger | 10 | ✅ |
 
 ### 已知问题
 

@@ -6,7 +6,7 @@
 
 ## 项目状态
 
-✅ **Phase 7 完成** | **296 tests passing (99%)**
+✅ **Phase 7 完成** | **368 tests passing (100%)**
 
 核心功能：
 - ✅ 数据闭环（自动提取客户信息、事实、预测）
@@ -79,28 +79,37 @@ karma/
 │   │   ├── runner.ts         # Agent Runner（消息持久化 + 信息提取）
 │   │   ├── info-extractor.ts # 从输出提取结构化信息
 │   │   └── monologue-filter.ts
+│   ├── api/                  # HTTP API 服务器
+│   │   └── server.ts
 │   ├── config/               # YAML 配置加载
 │   ├── logger/               # Pino 日志系统
+│   ├── output/               # 输出适配器
+│   │   └── adapters/
+│   │       ├── cli.ts
+│   │       └── feishu.ts
 │   ├── persona/              # 人设服务
 │   │   ├── service.ts        # PersonaService
 │   │   └── history-extractor.ts
 │   ├── platform/             # 平台适配器
-│   │   └── adapters/feishu/
+│   │   └── adapters/
+│   │       ├── feishu/       # 飞书 WebSocket
+│   │       └── http/         # HTTP API
 │   ├── prompt/               # System Prompt 构建
-│   │   └── parts/
+│   │   └── parts/            # 7 个模块化部分
 │   ├── session/              # 会话管理
 │   ├── skills/               # Skills 加载器
 │   ├── storage/              # SQLite 存储
-│   │   ├── service.ts        # 21 个 CRUD 方法
+│   │   ├── service.ts        # 22 个 CRUD 方法
 │   │   └── schema.ts         # 5 张表定义
-│   └── tools/                # 命理专用工具
-│       ├── bazi-calculator.ts
-│       └── registry.ts
+│   ├── tools/                # 命理专用工具
+│   │   ├── bazi-calculator.ts
+│   │   └── registry.ts
+│   └── types/                # 类型定义
 ├── skills/
 │   ├── methodology/SKILL.md
 │   ├── psychology/SKILL.md
 │   └── examples/SKILL.md
-└── tests/                    # 296 tests
+└── tests/                    # 365 tests
 ```
 
 ---
@@ -196,23 +205,23 @@ predictions      # 预测
 ## 测试统计
 
 ```
-Test Files  25 passed
-Tests       296 passed
+Test Files  28 passed
+Tests       368 passed
 Duration    ~2s
 ```
 
 覆盖模块：
-- Storage: 31 tests
+- Agent: 90 tests (消息持久化、信息提取、Persona 集成)
+- Integration: 51 tests
+- Prompt: 51 tests
 - Skills: 39 tests
-- Prompt: 32 tests
-- Agent: 49 tests (含消息持久化、信息提取、Persona 集成)
-- Persona: 20 tests
-- Tools: 10 tests (八字排盘)
-- Integration: 28 tests
-- Platform: 16 tests
-- Logger: 17 tests
+- Storage: 35 tests
+- Platform: 30 tests
+- Session: 24 tests
+- Persona: 17 tests
 - Output: 11 tests
-- Session: 20 tests
+- Tools: 10 tests (八字排盘)
+- Logger: 10 tests
 
 ---
 

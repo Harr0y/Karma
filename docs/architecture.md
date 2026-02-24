@@ -21,7 +21,7 @@
 | 八字排盘工具 | ✅ 完成 | lunar-javascript 集成 |
 | Platform Adapters | ✅ 完成 | CLI + 飞书 WebSocket |
 | Output Adapter | ✅ 完成 | MonologueFilter + 平台适配 |
-| 测试系统 | ✅ 完成 | 365 tests (100% passing) |
+| 测试系统 | ✅ 完成 | 368 tests (100% passing) |
 
 ---
 
@@ -29,7 +29,7 @@
 
 ```
 Test Files  28 passed (28)
-Tests       365 passed (365)
+Tests       368 passed (368)
 Duration    ~2s
 ```
 
@@ -69,7 +69,7 @@ Duration    ~2s
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Platform Adapters                          │
-│                 CLI │ Feishu │ WeChat (未来)                    │
+│              CLI │ HTTP │ Feishu │ Discord/Telegram (未来)      │
 └────────────────────────┬────────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────────┐
@@ -240,7 +240,7 @@ export interface SystemPromptContext {
   now: Date;
   clientProfile?: ClientProfile;
   skills: Skill[];
-  platform: 'cli' | 'feishu' | 'wechat';
+  platform: 'cli' | 'http' | 'feishu' | 'discord' | 'telegram';
   personaConfig?: PersonaConfig;
 }
 
@@ -320,7 +320,7 @@ export const sessions = sqliteTable('sessions', {
   clientId: text('client_id').references(() => clients.id),
   sdkSessionId: text('sdk_session_id'),    // Claude SDK session_id
 
-  platform: text('platform'),              // 'cli' | 'feishu' | 'wechat'
+  platform: text('platform'),              // 'cli' | 'http' | 'feishu' | 'discord' | 'telegram'
   externalChatId: text('external_chat_id'),
 
   status: text('status').default('active'),
@@ -413,7 +413,7 @@ export class SessionManager {
   private activeSessions: Map<string, ActiveSession>;
 
   async getOrCreateSession(context: {
-    platform: 'cli' | 'feishu' | 'wechat';
+    platform: 'cli' | 'http' | 'feishu' | 'discord' | 'telegram';
     externalChatId?: string;
     userInfo?: { name?: string; id?: string };
   }): Promise<ActiveSession> {
@@ -573,7 +573,7 @@ export interface KarmaQueryOptions {
   session: ActiveSession;
   clientProfile?: ClientProfile;
   skills: Skill[];
-  platform: 'cli' | 'feishu' | 'wechat';
+  platform: 'cli' | 'http' | 'feishu' | 'discord' | 'telegram';
 }
 
 export async function* karmaQuery(

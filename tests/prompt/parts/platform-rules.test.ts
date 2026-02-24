@@ -17,15 +17,35 @@ describe('buildPlatformRules', () => {
     expect(result).toContain('markdown');
   });
 
-  it('should include WeChat-specific rules', async () => {
-    const result = await buildPlatformRules('wechat');
+  it('should include HTTP-specific rules', async () => {
+    const result = await buildPlatformRules('http');
 
-    expect(result).toContain('WeChat');
-    expect(result).toMatch(/length|limited|分段/i);
+    expect(result).toContain('HTTP');
+    expect(result).toContain('SSE');
+  });
+
+  it('should include Discord-specific rules', async () => {
+    const result = await buildPlatformRules('discord');
+
+    expect(result).toContain('Discord');
+    expect(result).toMatch(/2000|limit/i);
+  });
+
+  it('should include Telegram-specific rules', async () => {
+    const result = await buildPlatformRules('telegram');
+
+    expect(result).toContain('Telegram');
+    expect(result).toMatch(/4096|limit/i);
   });
 
   it('should return empty string for unknown platform', async () => {
     const result = await buildPlatformRules('unknown' as any);
+
+    expect(result).toBe('');
+  });
+
+  it('should return empty string for deprecated wechat platform', async () => {
+    const result = await buildPlatformRules('wechat' as any);
 
     expect(result).toBe('');
   });

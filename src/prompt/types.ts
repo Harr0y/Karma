@@ -3,7 +3,8 @@
 import type { Skill } from '@/skills/types.js';
 import type { PersonaConfig } from '@/persona/types.js';
 
-export type Platform = 'cli' | 'feishu' | 'wechat';
+// 从统一类型定义导入 Platform 类型
+export type { Platform } from '../types/platform.js';
 
 export { PersonaConfig };
 
