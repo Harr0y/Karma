@@ -106,7 +106,7 @@ The **karma-simulator** is a specialized skill that runs in disclaude to automat
 │  │  • Persistent clientId across requests                     │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
-│  Startup: npm run server (default port: 3000)                   │
+│  Startup: pnpm server (default port: 3000)                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -167,7 +167,7 @@ cd /Users/lizhengchen/project/Karma
 pnpm install
 
 # Start the server
-npm run server
+pnpm server
 ```
 
 **Verify the server is running:**
@@ -968,8 +968,8 @@ jobs:
 
       - name: Start Karma Server
         run: |
-          npm install
-          npm run server &
+          pnpm install
+          pnpm server &
           sleep 5
 
       - name: Run Simulator Tests
@@ -991,7 +991,7 @@ jobs:
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| "Connection refused" | Karma server not running | Run `npm run server` |
+| "Connection refused" | Karma server not running | Run `pnpm server` |
 | Empty responses | API error | Check server logs |
 | SSE stream not ending | Response parsing issue | Check for `type: "done"` |
 | Persona not found | Wrong path | Verify SKILL.md location |
@@ -1002,7 +1002,7 @@ To get more detailed output during testing:
 
 ```bash
 # Set log level to debug
-LOG_LEVEL=debug npm run server
+LOG_LEVEL=debug pnpm server
 ```
 
 ### 11.3 Manual API Testing
