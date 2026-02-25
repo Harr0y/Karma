@@ -4,7 +4,8 @@ import type { Skill } from '@/skills/types.js';
 import type { PersonaConfig } from '@/persona/types.js';
 
 // 从统一类型定义导入 Platform 类型
-export type { Platform } from '../types/platform.js';
+import type { Platform } from '../types/platform.js';
+export type { Platform };
 
 export { PersonaConfig };
 

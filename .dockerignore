@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Environment files (use .env for runtime config)
+.env*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+tests/
+coverage/
+*.test.ts
+*.spec.ts
+
+# Claude Code settings
+.claude/
+
+# Test reports
+test-reports/
+
+# Logs
+*.log
+
+# Database files (will be in volume)
+*.db
+*.db-journal
+
+# Documentation
+docs/
+*.md
+!README.md

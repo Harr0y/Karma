@@ -1,0 +1,74 @@
+# Karma Dockerfile
+# Multi-stage build for production deployment
+
+# Stage 1: Build
+FROM node:20-alpine AS builder
+
+# Install build dependencies for better-sqlite3
+RUN apk add --no-cache python3 make g++ git
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build TypeScript
+RUN pnpm build
+
+# Stage 2: Production
+FROM node:20-alpine AS production
+
+# Install runtime dependencies for better-sqlite3
+RUN apk add --no-cache python3 make g++
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Install production dependencies only
+RUN pnpm install --frozen-lockfile --prod
+
+# Copy built files from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/config ./config
+COPY --from=builder /app/skills ./skills
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S karma && \
+    adduser -S -D -H -u 1001 -h /home/karma -s /sbin/nologin -G karma -g karma karma && \
+    mkdir -p /home/karma/.karma && \
+    chown -R karma:karma /home/karma
+
+# Create data directory for SQLite and set permissions
+RUN mkdir -p /data && \
+    chown -R karma:karma /app /data
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV HOME=/home/karma
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Switch to non-root user
+USER karma
+
+# Run the server
+CMD ["node", "dist/index.js", "server"]

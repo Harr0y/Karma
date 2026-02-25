@@ -1,0 +1,31 @@
+services:
+  karma:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: karma-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # GLM API 配置
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://open.bigmodel.cn/api/anthropic}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-glm-5}
+      # 存储路径 (容器内)
+      - HOME=/home/karma
+    volumes:
+      # 持久化数据库
+      - karma-data:/home/karma/.karma
+      # 配置文件 (可选，如果需要自定义配置)
+      # - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  karma-data:
+    driver: local

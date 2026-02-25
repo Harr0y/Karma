@@ -27,7 +27,7 @@ function printUsage() {
 
   服务器选项:
     --port <number>    指定端口 (默认: 3000)
-    --host <string>    指定主机 (默认: localhost)
+    --host <string>    指定主机 (默认: 0.0.0.0)
 `);
 }
 
@@ -46,7 +46,7 @@ async function main() {
     const hostIndex = args.indexOf('--host');
 
     const port = portIndex !== -1 ? parseInt(args[portIndex + 1], 10) : 3000;
-    const host = hostIndex !== -1 ? args[hostIndex + 1] : 'localhost';
+    const host = hostIndex !== -1 ? args[hostIndex + 1] : '0.0.0.0';
 
     console.log('\n  \x1b[33m✦ Karma API Server ✦\x1b[0m\n');
     console.log(`启动中... (端口: ${port})\n`);
