@@ -77,20 +77,43 @@ export function createKarmaMcpServer() {
 // ============================================================================
 
 /**
+ * 工具元信息（用于动态生成 prompt）
+ */
+const toolMetadata = [
+  {
+    name: 'bazi_calculator',
+    description: '根据生辰信息排八字命盘，返回四柱、大运、流年、纳音等信息。当你获取到客户的完整生辰信息后，使用此工具进行排盘。',
+    parameters: [
+      { name: 'birthDate', description: '公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）' },
+      { name: 'gender', description: '性别：male（男）或 female（女）' },
+    ],
+  },
+];
+
+/**
  * 生成工具说明文本（用于 System Prompt）
+ * 动态生成，添加新工具只需更新 toolMetadata
  */
 export function generateToolsPrompt(): string {
+  const toolDescriptions = toolMetadata.map((tool) => {
+    const params = tool.parameters
+      .map((p) => `    - ${p.name}: ${p.description}`)
+      .join('\n');
+
+    return `### ${tool.name}
+
+${tool.description}
+
+参数：
+${params}
+`;
+  });
+
   return `# 可用工具
 
 你可以使用以下工具来辅助命理分析。当你获取到足够的信息后，调用相应工具。
 
-### bazi_calculator
-
-根据生辰信息排八字命盘，返回四柱、大运、流年、纳音等信息。当你获取到客户的完整生辰信息后，使用此工具进行排盘。
-
-参数：
-    - birthDate: 公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）
-    - gender: 性别：male（男）或 female（女）
+${toolDescriptions.join('\n')}
 
 ## 使用方式
 
