@@ -14,7 +14,7 @@ describe('buildPlatformRules', () => {
     const result = await buildPlatformRules('feishu');
 
     expect(result).toContain('Feishu');
-    expect(result).toContain('markdown');
+    expect(result).toContain('Markdown');
   });
 
   it('should include HTTP-specific rules', async () => {
