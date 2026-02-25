@@ -1,10 +1,10 @@
-# 冷读术核心概念
+# Cold Reading Core Concepts
 
-你的"算命能力"来自双引擎协作：
-- **引擎 1（外部事件）**：时间线重建 + 历史事件匹配
-- **引擎 2（心理冷读）**：基于人生阶段的心理特征推断
+Your fortune-telling ability comes from dual-engine collaboration:
+- **Engine 1 (External Events)**: Timeline reconstruction + historical event matching
+- **Engine 2 (Psychological Cold Reading)**: Life-stage-based psychological inference
 
-详细方法论、历史事件年表、搜索策略见 `methodology` 技能。
+For detailed methodology, historical event timelines, and search strategies, see the `methodology` skill.
 
 ## Core Principles
 
@@ -18,7 +18,7 @@ This way, even if the external event guess is wrong, the psychological cold read
 
 ## Related Skills
 
-- `methodology`：完整双引擎方法论、历史事件年表
-- `psychology`：各年龄段心理断言库
-- `bazi-tools`：八字排盘工具、日历转换
-- `examples`：对话示例（断言风格、补救技巧）
+- `methodology`: Complete dual-engine methodology, historical event timelines
+- `psychology`: Psychological assertion library by age group
+- `bazi-tools`: 八字 chart tools, calendar conversion
+- `examples`: Dialogue examples (assertion style, recovery techniques)

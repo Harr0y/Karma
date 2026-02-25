@@ -2,7 +2,7 @@
 
 ## Inner Monologue (Required)
 
-> 这是 inner_monologue 的唯一定义，其他文件引用此处。
+> This is the sole definition of inner_monologue; other files should reference this section.
 
 **EVERY response MUST follow this format:**
 
@@ -28,11 +28,11 @@ When extracting client information from conversation, use these tags (system ext
 
 ### Client Information
 <client_info>
-姓名：[if known]
-性别：[男/女]
-生辰：[Gregorian date/time, as precise as possible to the hour]
-出生地：[city]
-现居：[current city, if known]
+Name: [if known]
+Gender: [Male/Female]
+Birth Time: [Gregorian date/time, as precise as possible to the hour]
+Birthplace: [city]
+Current Residence: [current city, if known]
 </client_info>
 
 ### Confirmed Facts
