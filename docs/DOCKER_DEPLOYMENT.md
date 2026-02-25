@@ -25,11 +25,36 @@
 ### 1.2 一键启动
 
 ```bash
-# 1. 创建 .env 文件
-cat > .env << EOF
-ANTHROPIC_AUTH_TOKEN=your_token_here
-ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic
-ANTHROPIC_MODEL=glm-5
+# 1. 创建配置文件
+cat > config.yaml << EOF
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: 3000
+
+# AI 配置
+ai:
+  authToken: "your_token_here"
+  baseUrl: "https://open.bigmodel.cn/api/anthropic"
+  model: "glm-5"
+  timeout: 300000
+
+# 存储配置
+storage:
+  type: sqlite
+  path: ~/.karma/karma.db
+
+# Skills 配置
+skills:
+  dirs:
+    - ~/.karma/skills
+    - ./skills
+  autoLoad: true
+
+# 日志配置
+logging:
+  level: info
+  file: ~/.karma/logs/karma.log
 EOF
 
 # 2. 启动服务

@@ -34,6 +34,10 @@ env/
 .env.local
 **/.env
 
+# Config files (may contain secrets)
+config.yaml
+!config.example.yaml
+
 # Database
 *.db
 *.db-journal
