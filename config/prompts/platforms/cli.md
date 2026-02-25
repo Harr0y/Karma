@@ -1,6 +1,15 @@
 # CLI Platform Rules
 
-- Direct terminal output, supports ANSI colors
-- Long replies are acceptable without length limits
-- Use markdown format (tables, lists, code blocks)
-- Multi-line output supported
+## Character Limits
+- No strict limit, terminal is scrollable
+- Recommended: keep single output under 2000 characters for readability
+
+## Format Support
+- Full markdown support
+- ANSI colors supported
+- Tables, code blocks, lists all work
+
+## Content Style
+- Can go into detail
+- Use formatting to improve readability
+- Like terminal tool output

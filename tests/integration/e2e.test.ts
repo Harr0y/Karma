@@ -158,7 +158,7 @@ describe('E2E: CLI Agent', () => {
       const methodology = skills.find(s => s.name === 'methodology');
       expect(methodology).toBeDefined();
       expect(methodology?.description).toContain('双引擎');
-      expect(methodology?.body).toContain('时间线重建');
+      expect(methodology?.body).toContain('Timeline Reconstruction');
     });
   });
 
