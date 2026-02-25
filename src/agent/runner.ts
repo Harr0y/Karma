@@ -24,6 +24,7 @@ export interface AgentRunnerConfig {
   model: string;
   baseUrl?: string;
   authToken?: string;
+  timeout?: number; // 超时时间（毫秒），默认 300000 (5分钟)
 }
 
 export interface RunOptions {
@@ -55,7 +56,7 @@ export class AgentRunner {
    */
   async *run(options: RunOptions): AsyncGenerator<ProcessedMessage> {
     const { userInput, session } = options;
-    const { storage, sessionManager, skills, personaService, model, baseUrl, authToken } =
+    const { storage, sessionManager, skills, personaService, model, baseUrl, authToken, timeout } =
       this.config;
 
     const getDuration = this.logger.startTimer('run');
@@ -110,8 +111,20 @@ export class AgentRunner {
     // 3. 调用 SDK
     this.logger.debug('调用 SDK', {
       operation: 'sdk_call',
-      metadata: { model, resume: session.sdkSessionId },
+      metadata: { model, resume: session.sdkSessionId, timeout },
     });
+
+    // 创建 AbortController 用于超时控制
+    const timeoutMs = timeout ?? 300000; // 默认 5 分钟
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+      this.logger.warn('请求超时，正在中止', {
+        operation: 'timeout_abort',
+        sessionId: session.id,
+        metadata: { timeoutMs },
+      });
+    }, timeoutMs);
 
     const queryOptions = {
       model,
@@ -121,6 +134,7 @@ export class AgentRunner {
       allowDangerouslySkipPermissions: true,
       cwd: process.cwd(),
       env,
+      abortController,
     };
 
     let q;
@@ -205,6 +219,9 @@ export class AgentRunner {
         }
       }
 
+      // 正常完成，立刻清除超时定时器
+      clearTimeout(timeoutId);
+
       const duration = getDuration();
       this.logger.info('请求处理完成', {
         operation: 'run_complete',
@@ -213,11 +230,26 @@ export class AgentRunner {
         metadata: { messageCount: msgCount },
       });
     } catch (err: any) {
+      // 处理超时错误
+      if (err.name === 'AbortError' || abortController.signal.aborted) {
+        const timeoutError = new Error(`请求超时（${timeoutMs}ms）`);
+        timeoutError.name = 'TimeoutError';
+        this.logger.error('请求超时', timeoutError, {
+          operation: 'timeout_error',
+          sessionId: session.id,
+          metadata: { timeoutMs },
+        });
+        throw timeoutError;
+      }
+
       this.logger.error('迭代异常', err, {
         operation: 'run_error',
         sessionId: session.id,
       });
       throw err;
+    } finally {
+      // 确保超时定时器被清除
+      clearTimeout(timeoutId);
     }
   }
 

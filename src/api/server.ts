@@ -111,6 +111,7 @@ export class KarmaServer {
       model: this.config.ai.model,
       baseUrl: this.config.ai.baseUrl,
       authToken: this.config.ai.authToken,
+      timeout: this.config.ai.timeout,
     });
   }
 
