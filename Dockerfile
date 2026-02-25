@@ -49,7 +49,7 @@ COPY --from=builder /app/skills ./skills
 # Create non-root user for security
 RUN addgroup -g 1001 -S karma && \
     adduser -S -D -H -u 1001 -h /home/karma -s /sbin/nologin -G karma -g karma karma && \
-    mkdir -p /home/karma/.karma && \
+    mkdir -p /home/karma/.karma/logs /home/karma/.karma/skills && \
     chown -R karma:karma /home/karma
 
 # Create data directory for SQLite and set permissions
@@ -67,8 +67,12 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh && chown karma:karma /app/docker-entrypoint.sh
+
 # Switch to non-root user
 USER karma
 
 # Run the server
-CMD ["node", "dist/index.js", "server"]
+CMD ["./docker-entrypoint.sh"]
