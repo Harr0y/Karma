@@ -12,6 +12,8 @@ import { PersonaService } from '../persona/index.js';
 import { getConfig } from '../config/index.js';
 import { getLogger, setLogger, createLogger, type Logger } from '../logger/index.js';
 import { HttpAdapter } from '../platform/adapters/http/index.js';
+import { TelegramAdapter } from '../platform/adapters/telegram/index.js';
+import type { TelegramUpdate } from '../platform/adapters/telegram/index.js';
 import type { ActiveSession } from '../session/types.js';
 import type {
   CreateSessionRequest,
@@ -43,6 +45,8 @@ export class KarmaServer {
   private logger: Logger;
   private server?: http.Server;
   private httpAdapter: HttpAdapter;
+  private telegramAdapter?: TelegramAdapter;
+  private typingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(serverConfig?: ServerConfig) {
     // 初始化 Logger
@@ -113,6 +117,30 @@ export class KarmaServer {
       authToken: this.config.ai.authToken,
       timeout: this.config.ai.timeout,
     });
+
+    // 初始化 Telegram 适配器（如果配置了）
+    if (this.config.telegram?.botToken && this.config.telegram?.enabled !== false) {
+      this.telegramAdapter = new TelegramAdapter({
+        botToken: this.config.telegram.botToken,
+        webhookSecret: this.config.telegram.webhookSecret || '',
+        enabled: this.config.telegram.enabled ?? true,
+        maxMessageLength: this.config.telegram.maxMessageLength,
+        apiRetryAttempts: this.config.telegram.apiRetryAttempts,
+        apiRetryDelay: this.config.telegram.apiRetryDelay,
+      });
+
+      // 注册消息处理器
+      this.telegramAdapter.onMessage(async (message) => {
+        await this.handleTelegramMessage(message);
+      });
+
+      await this.telegramAdapter.start();
+
+      this.logger.info('Telegram 适配器已初始化', {
+        operation: 'telegram_init',
+        metadata: { enabled: true },
+      });
+    }
   }
 
   /**
@@ -144,6 +172,18 @@ export class KarmaServer {
    */
   stop(): Promise<void> {
     return new Promise((resolve) => {
+      // 清理所有打字指示器
+      for (const chatId of this.typingIntervals.keys()) {
+        this.stopTypingIndicator(chatId);
+      }
+
+      // 停止 Telegram 适配器
+      if (this.telegramAdapter) {
+        this.telegramAdapter.stop().catch(() => {
+          // 忽略错误
+        });
+      }
+
       if (this.server) {
         this.server.close(() => {
           this.storage.close();
@@ -182,6 +222,8 @@ export class KarmaServer {
         await this.handleChat(req, res);
       } else if (url.startsWith('/api/history/') && method === 'GET') {
         await this.handleGetHistory(req, res, url);
+      } else if (url === '/telegram/webhook' && method === 'POST') {
+        await this.handleTelegramWebhook(req, res);
       } else if (url === '/health' || url === '/') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', service: 'karma-api' }));
@@ -385,6 +427,130 @@ export class KarmaServer {
     const error: APIError = { error: message, code };
     res.writeHead(status, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(error));
+  }
+
+  /**
+   * POST /telegram/webhook - Telegram Webhook 端点
+   */
+  private async handleTelegramWebhook(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
+    if (!this.telegramAdapter) {
+      this.sendError(res, 503, 'SERVICE_UNAVAILABLE', 'Telegram adapter not configured');
+      return;
+    }
+
+    const body = await this.readBody(req);
+    if (!body) {
+      this.sendError(res, 400, 'BAD_REQUEST', 'Request body required');
+      return;
+    }
+
+    try {
+      const update: TelegramUpdate = JSON.parse(body);
+
+      // 从 header 获取 X-Telegram-Bot-Api-Secret-Token
+      const secretToken = req.headers['x-telegram-bot-api-secret-token'] as string | undefined;
+
+      await this.telegramAdapter.handleWebhook(update, secretToken);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err: any) {
+      this.logger.error('Telegram webhook 错误', err, { operation: 'telegram_webhook_error' });
+
+      if (err.message === 'Invalid webhook secret') {
+        this.sendError(res, 401, 'UNAUTHORIZED', 'Invalid webhook secret');
+      } else {
+        this.sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+  }
+
+  /**
+   * 处理 Telegram 消息
+   */
+  private async handleTelegramMessage(message: { id: string; chatId: string; text?: string; userId?: string }): Promise<void> {
+    if (!message.text) {
+      return;
+    }
+
+    const chatId = message.chatId;
+
+    // 启动打字指示器
+    this.startTypingIndicator(chatId);
+
+    try {
+      // 获取或创建会话
+      const session = await this.sessionManager.getOrCreateSession({
+        platform: 'telegram',
+        externalChatId: chatId,
+      });
+
+      // 运行 Agent
+      let fullResponse = '';
+      for await (const msg of this.runner.run({ userInput: message.text, session })) {
+        if (msg.type === 'text') {
+          fullResponse += msg.content;
+        }
+      }
+
+      // 发送响应
+      if (fullResponse && this.telegramAdapter) {
+        await this.telegramAdapter.sendMessage(chatId, fullResponse);
+      }
+    } catch (err: any) {
+      this.logger.error('Telegram 消息处理错误', err, {
+        operation: 'telegram_message_error',
+        metadata: { chatId },
+      });
+
+      // 发送错误提示
+      if (this.telegramAdapter) {
+        await this.telegramAdapter.sendMessage(chatId, '抱歉，处理您的消息时出现错误。请稍后再试。');
+      }
+    } finally {
+      // 停止打字指示器
+      this.stopTypingIndicator(chatId);
+    }
+  }
+
+  /**
+   * 启动打字指示器（每 5 秒发送一次）
+   */
+  private startTypingIndicator(chatId: string): void {
+    // 先清除已有的
+    this.stopTypingIndicator(chatId);
+
+    // 立即发送一次
+    if (this.telegramAdapter) {
+      this.telegramAdapter.sendTypingIndicator(chatId).catch((err) => {
+        this.logger.warn('发送打字指示器失败', { operation: 'typing_indicator', metadata: { error: err.message } });
+      });
+    }
+
+    // 设置定时器，每 5 秒发送一次
+    const interval = setInterval(() => {
+      if (this.telegramAdapter) {
+        this.telegramAdapter.sendTypingIndicator(chatId).catch(() => {
+          // 忽略错误
+        });
+      }
+    }, 5000);
+
+    this.typingIntervals.set(chatId, interval);
+  }
+
+  /**
+   * 停止打字指示器
+   */
+  private stopTypingIndicator(chatId: string): void {
+    const interval = this.typingIntervals.get(chatId);
+    if (interval) {
+      clearInterval(interval);
+      this.typingIntervals.delete(chatId);
+    }
   }
 }
 
