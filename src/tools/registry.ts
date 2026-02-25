@@ -1,89 +1,103 @@
 // Karma Tools - 自定义工具注册
-// 这些工具可以通过 prompt 引导 Agent 使用
+// 使用 SDK 的 createSdkMcpServer 注册工具
 
+import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
 import { calculateBazi, formatBaziResult } from './bazi-calculator.js';
 import type { BaziInput } from './bazi-calculator.js';
 
-/**
- * 工具定义
- */
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: 'object';
-    properties: Record<string, {
-      type: string;
-      description: string;
-      enum?: string[];
-    }>;
-    required?: string[];
-  };
-  handler: (input: Record<string, any>) => Promise<any>;
-}
+// ============================================================================
+// Schema 定义（提到函数外，避免重复创建）
+// ============================================================================
 
 /**
- * 八字排盘工具
+ * 八字排盘工具的 Zod Schema
  */
-export const baziCalculatorTool: ToolDefinition = {
-  name: 'bazi_calculator',
-  description: '根据生辰信息排八字命盘，返回四柱、大运、流年、纳音等信息。当你获取到客户的完整生辰信息后，使用此工具进行排盘。',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      birthDate: {
-        type: 'string',
-        description: '公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）',
-      },
-      gender: {
-        type: 'string',
-        enum: ['male', 'female'],
-        description: '性别：male（男）或 female（女）',
-      },
-    },
-    required: ['birthDate', 'gender'],
-  },
-  handler: async (input: Record<string, any>) => {
-    const baziInput: BaziInput = {
-      birthDate: input.birthDate,
-      gender: input.gender,
-    };
-
-    const result = await calculateBazi(baziInput);
-    return {
-      success: true,
-      data: result,
-      formatted: formatBaziResult(result),
-    };
-  },
+const baziSchema = {
+  birthDate: z.string().describe('公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）'),
+  gender: z.enum(['male', 'female']).describe('性别：male（男）或 female（女）'),
 };
 
-/**
- * 所有自定义工具
- */
-export const karmaTools: ToolDefinition[] = [baziCalculatorTool];
+// ============================================================================
+// MCP Server 创建
+// ============================================================================
 
 /**
- * 执行工具
+ * 创建 Karma MCP Server
+ * 使用 SDK 的 createSdkMcpServer 注册工具
  */
-export async function executeTool(
-  name: string,
-  input: Record<string, any>
-): Promise<any> {
-  const tool = karmaTools.find((t) => t.name === name);
-  if (!tool) {
-    throw new Error(`Unknown tool: ${name}`);
-  }
-  return tool.handler(input);
+export function createKarmaMcpServer() {
+  // 创建 SDK 工具
+  const baziTool = tool(
+    'bazi_calculator',
+    '根据生辰信息排八字命盘，返回四柱、大运、流年、纳音等信息。当你获取到客户的完整生辰信息后，使用此工具进行排盘。',
+    baziSchema,
+    async (args, _extra) => {
+      try {
+        const baziInput: BaziInput = {
+          birthDate: args.birthDate,
+          gender: args.gender,
+        };
+
+        const result = await calculateBazi(baziInput);
+        const formatted = formatBaziResult(result);
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: formatted,
+            },
+          ],
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `八字排盘失败: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // 创建并返回 MCP Server
+  return createSdkMcpServer({
+    name: 'karma-tools',
+    version: '1.0.0',
+    tools: [baziTool],
+  });
 }
 
+// ============================================================================
+// Prompt 生成（用于 System Prompt 中的工具说明）
+// ============================================================================
+
 /**
- * 生成工具说明文本（用于 prompt）
+ * 工具元信息（用于动态生成 prompt）
+ */
+const toolMetadata = [
+  {
+    name: 'bazi_calculator',
+    description: '根据生辰信息排八字命盘，返回四柱、大运、流年、纳音等信息。当你获取到客户的完整生辰信息后，使用此工具进行排盘。',
+    parameters: [
+      { name: 'birthDate', description: '公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）' },
+      { name: 'gender', description: '性别：male（男）或 female（女）' },
+    ],
+  },
+];
+
+/**
+ * 生成工具说明文本（用于 System Prompt）
+ * 动态生成，添加新工具只需更新 toolMetadata
  */
 export function generateToolsPrompt(): string {
-  const toolDescriptions = karmaTools.map((tool) => {
-    const props = Object.entries(tool.inputSchema.properties)
-      .map(([key, value]) => `    - ${key}: ${value.description}`)
+  const toolDescriptions = toolMetadata.map((tool) => {
+    const params = tool.parameters
+      .map((p) => `    - ${p.name}: ${p.description}`)
       .join('\n');
 
     return `### ${tool.name}
@@ -91,7 +105,7 @@ export function generateToolsPrompt(): string {
 ${tool.description}
 
 参数：
-${props}
+${params}
 `;
   });
 
