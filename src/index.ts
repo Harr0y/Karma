@@ -160,6 +160,7 @@ async function main() {
     model: config.ai.model,
     baseUrl: config.ai.baseUrl,
     authToken: config.ai.authToken,
+    timeout: config.ai.timeout,
   });
 
   // 5. 获取/创建会话

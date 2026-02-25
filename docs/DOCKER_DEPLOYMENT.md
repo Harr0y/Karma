@@ -325,7 +325,27 @@ docker compose up -d
 **可能原因：**
 1. Colima 未运行 - 运行 `colima start`
 2. 端口被占用 - 检查 `lsof -i :3000`
-3. 代理干扰 - 使用 `curl --noproxy '*'`
+3. 代理干扰 - 见下方解决方案
+
+**代理干扰解决方案：**
+
+方式一：临时绕过（推荐）
+```bash
+curl --noproxy '*' http://localhost:3000/health
+```
+
+方式二：配置环境变量（永久）
+```bash
+# 添加到 ~/.zshrc 或 ~/.bashrc
+export NO_PROXY=localhost,127.0.0.1,0.0.0.0
+export no_proxy=localhost,127.0.0.1,0.0.0.0
+```
+
+方式三：curl 配置文件
+```bash
+# 创建 ~/.curlrc
+echo "noproxy = localhost,127.0.0.1,0.0.0.0" >> ~/.curlrc
+```
 
 ### 5.4 SDK 找不到 CLI
 

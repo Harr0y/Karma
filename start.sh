@@ -36,8 +36,12 @@ case "${1:-up}" in
   status)
     docker compose ps
     ;;
+  test)
+    echo "🧪 测试 API 连接..."
+    curl --noproxy '*' -s http://localhost:3000/health && echo "" || echo "❌ 连接失败"
+    ;;
   *)
-    echo "用法: $0 {up|down|logs|restart|status}"
+    echo "用法: $0 {up|down|logs|restart|status|test}"
     exit 1
     ;;
 esac
