@@ -26,7 +26,7 @@ disable-model-invocation: false
 - 纳音
 
 **使用方式：**
-在 inner_monologue 中调用：
+在 inner_monologue 中调用（inner_monologue 格式见 output-rules.md）：
 ```
 调用工具: bazi_calculator
 参数: {
@@ -84,7 +84,7 @@ disable-model-invocation: false
 
 ## 使用时机
 
-在 inner_monologue 中判断：
+在 inner_monologue 中判断（inner_monologue 格式见 output-rules.md）：
 
 ```
 <inner_monologue>

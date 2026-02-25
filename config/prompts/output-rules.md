@@ -2,6 +2,8 @@
 
 ## Inner Monologue (Required)
 
+> 这是 inner_monologue 的唯一定义，其他文件引用此处。
+
 **EVERY response MUST follow this format:**
 
 <inner_monologue>

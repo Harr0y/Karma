@@ -14,7 +14,7 @@ disable-model-invocation: false
 
 ### 第一步：构建人生节点时间线
 
-根据出生年份，推算以下关键年份（写入你的 inner_monologue）：
+根据出生年份，推算以下关键年份（写入 inner_monologue，格式见 output-rules.md）：
 - 上小学：出生年 + 6~7
 - 上初中：出生年 + 12~13
 - 上高中：出生年 + 15~16
