@@ -191,6 +191,16 @@ export class AgentRunner {
                   yield { type: 'text', content: filtered, raw: msg };
                 }
               } else if (block.type === 'tool_use') {
+                // 记录工具调用
+                this.logger.info('工具调用', {
+                  operation: 'tool_use',
+                  sessionId: session.id,
+                  metadata: {
+                    toolName: block.name,
+                    toolId: block.id,
+                    input: block.input,
+                  },
+                });
                 yield { type: 'tool_use', content: block.name || 'tool', raw: msg };
               }
             }
