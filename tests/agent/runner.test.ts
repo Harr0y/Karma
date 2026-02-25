@@ -8,6 +8,8 @@ import type { ActiveSession } from '@/session/types';
 // Mock SDK
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: vi.fn(),
+  tool: vi.fn((name, desc, schema, handler) => ({ name, desc, schema, handler })),
+  createSdkMcpServer: vi.fn(() => ({})),
 }));
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
