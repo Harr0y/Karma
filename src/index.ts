@@ -26,8 +26,11 @@ function printUsage() {
     karma --help       显示帮助信息
 
   服务器选项:
-    --port <number>    指定端口 (默认: 3000)
-    --host <string>    指定主机 (默认: 0.0.0.0)
+    --port <number>    指定端口 (默认: 配置文件 server.port 或 3000)
+    --host <string>    指定主机 (默认: 配置文件 server.host 或 0.0.0.0)
+
+  配置文件:
+    ~/.karma/config.yaml 或 ./config.yaml
 `);
 }
 
@@ -42,11 +45,13 @@ async function main() {
 
   // server 子命令
   if (args[0] === 'server') {
+    const config = getConfig();
     const portIndex = args.indexOf('--port');
     const hostIndex = args.indexOf('--host');
 
-    const port = portIndex !== -1 ? parseInt(args[portIndex + 1], 10) : 3000;
-    const host = hostIndex !== -1 ? args[hostIndex + 1] : '0.0.0.0';
+    // 优先级：命令行参数 > 环境变量 > 配置文件 > 默认值
+    const port = portIndex !== -1 ? parseInt(args[portIndex + 1], 10) : config.server.port;
+    const host = hostIndex !== -1 ? args[hostIndex + 1] : config.server.host;
 
     console.log('\n  \x1b[33m✦ Karma API Server ✦\x1b[0m\n');
     console.log(`启动中... (端口: ${port})\n`);

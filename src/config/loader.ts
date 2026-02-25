@@ -7,6 +7,10 @@ import { parse } from 'yaml';
 import { getLogger } from '@/logger/index.js';
 
 export interface KarmaConfig {
+  server: {
+    host: string;
+    port: number;
+  };
   ai: {
     authToken: string;
     baseUrl: string;
@@ -28,6 +32,10 @@ export interface KarmaConfig {
 }
 
 const DEFAULT_CONFIG: KarmaConfig = {
+  server: {
+    host: '0.0.0.0',
+    port: 3000,
+  },
   ai: {
     authToken: '',
     baseUrl: 'https://api.anthropic.com',
@@ -135,6 +143,12 @@ export function loadConfig(): KarmaConfig {
   }
   if (process.env.ANTHROPIC_MODEL) {
     config.ai.model = process.env.ANTHROPIC_MODEL;
+  }
+  if (process.env.KARMA_SERVER_HOST) {
+    config.server.host = process.env.KARMA_SERVER_HOST;
+  }
+  if (process.env.KARMA_SERVER_PORT) {
+    config.server.port = parseInt(process.env.KARMA_SERVER_PORT, 10);
   }
 
   // 验证必要配置

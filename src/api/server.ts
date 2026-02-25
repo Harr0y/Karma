@@ -118,9 +118,9 @@ export class KarmaServer {
    * 启动服务器
    */
   start(options: ServerConfig = {}): Promise<void> {
-    const port = options.port || 3000;
-    // 默认绑定 0.0.0.0 以支持 Docker 容器访问
-    const host = options.host || '0.0.0.0';
+    // 优先级：options > config > 默认值
+    const port = options.port ?? this.config.server.port;
+    const host = options.host ?? this.config.server.host;
 
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => this.handleRequest(req, res));

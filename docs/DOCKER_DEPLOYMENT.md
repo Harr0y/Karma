@@ -44,21 +44,68 @@ curl http://localhost:3000/health
 
 ## 2. 配置说明
 
-### 2.1 环境变量
+### 2.1 配置优先级
 
-| 变量名 | 必填 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `ANTHROPIC_AUTH_TOKEN` | ✅ | - | API 认证 Token |
-| `ANTHROPIC_BASE_URL` | ❌ | `https://open.bigmodel.cn/api/anthropic` | API 基础 URL |
-| `ANTHROPIC_MODEL` | ❌ | `glm-5` | 使用的模型 |
+```
+命令行参数 > 环境变量 > 配置文件 > 默认值
+```
 
-### 2.2 .env 文件示例
+### 2.2 配置文件
+
+配置文件路径（按优先级）：
+1. `./config.yaml` - 当前目录
+2. `~/.karma/config.yaml` - 用户主目录
+
+```yaml
+# 服务器配置
+server:
+  host: "0.0.0.0"    # 监听地址
+  port: 3000         # 监听端口
+
+# AI 配置
+ai:
+  authToken: ${ANTHROPIC_AUTH_TOKEN:}
+  baseUrl: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+  model: ${ANTHROPIC_MODEL:claude-sonnet-4-5-20250929}
+  timeout: 300000
+
+# 存储配置
+storage:
+  type: sqlite
+  path: ~/.karma/karma.db
+
+# Skills 配置
+skills:
+  dirs:
+    - ~/.karma/skills
+    - ./skills
+  autoLoad: true
+
+# 日志配置
+logging:
+  level: info
+  file: ~/.karma/logs/karma.log
+```
+
+### 2.3 环境变量
+
+| 变量名 | 对应配置 | 默认值 | 说明 |
+|--------|----------|--------|------|
+| `ANTHROPIC_AUTH_TOKEN` | `ai.authToken` | - | API 认证 Token |
+| `ANTHROPIC_BASE_URL` | `ai.baseUrl` | `https://api.anthropic.com` | API 基础 URL |
+| `ANTHROPIC_MODEL` | `ai.model` | `claude-sonnet-4-5-20250929` | 使用的模型 |
+| `KARMA_SERVER_HOST` | `server.host` | `0.0.0.0` | 监听地址 |
+| `KARMA_SERVER_PORT` | `server.port` | `3000` | 监听端口 |
+
+### 2.4 Docker 环境变量示例
 
 ```env
-# GLM API 配置
+# .env 文件
 ANTHROPIC_AUTH_TOKEN=your_token_here
 ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic
 ANTHROPIC_MODEL=glm-5
+KARMA_SERVER_HOST=0.0.0.0
+KARMA_SERVER_PORT=3000
 ```
 
 ---
