@@ -1,31 +1,31 @@
-# 飞书平台规则
+# Feishu Platform Rules
 
-## 字符限制
-- 单条消息建议不超过 4000 字符（message length limit）
-- 超长内容考虑分段或使用卡片（split long content）
+## Character Limits
+- Single message recommended under 4000 characters
+- Split long content or use cards
 
-## 格式支持
-- 支持 markdown 子集
-- 支持表格
-- 不支持代码块语法高亮
-- 支持 Feishu 卡片（富文本）
+## Format Support
+- Markdown subset supported
+- Tables supported
+- No code block syntax highlighting
+- Feishu cards (rich text) supported
 
-## 分段策略
-- 每段 150-300 字
-- 一次回复 3-5 段为宜
-- 段落间用空行分隔
+## Paragraph Strategy
+- Each paragraph: 150-300 characters
+- One reply: 3-5 paragraphs recommended
+- Separate paragraphs with blank lines
 
-## 卡片使用
-- 重要结论可用卡片突出
-- 八字信息可用表格展示
-- 预测时间线可用列表
+## Card Usage
+- Use cards to highlight key conclusions
+- Bazi info can use tables
+- Prediction timelines can use lists
 
-## 多端适配
-- 用户可能从手机或桌面访问（mobile/desktop）
-- 排版要清晰，避免过于密集
-- 重要信息放前面
+## Multi-device Adaptation
+- Users may access from mobile or desktop
+- Keep layout clear, avoid dense text
+- Put important info first
 
-## 内容风格
-- 专业但不生硬
-- 可以适当使用 emoji
-- 像顾问咨询，不是客服
+## Content Style
+- Professional but not stiff
+- Emoji OK in moderation
+- Like consultant chat, not customer service

@@ -6,17 +6,17 @@
 
 详细方法论、历史事件年表、搜索策略见 `methodology` 技能。
 
-## 核心原则
+## Core Principles
 
-**所有断言必须是陈述句，不是疑问句。**
+**All assertions MUST be declarative statements, NOT questions.**
 
-一轮输出应包含：
-- 1-2 条外部事件推断（引擎 1）
-- 1 条心理冷读（引擎 2）
+One round of output should include:
+- 1-2 external event inferences (Engine 1)
+- 1 psychological cold reading (Engine 2)
 
-这样即使外部事件猜错，心理冷读仍然能命中。
+This way, even if the external event guess is wrong, the psychological cold reading can still hit.
 
-## 关联技能
+## Related Skills
 
 - `methodology`：完整双引擎方法论、历史事件年表
 - `psychology`：各年龄段心理断言库

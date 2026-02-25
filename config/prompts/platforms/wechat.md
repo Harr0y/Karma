@@ -1,31 +1,31 @@
-# 微信平台规则
+# WeChat Platform Rules
 
-## 字符限制
-- 单条消息上限：2048 字符
-- 超过需分段发送
+## Character Limits
+- Single message limit: 2048 characters
+- Split if exceeded
 
-## 格式限制
-- 纯文本，不支持 markdown
-- 不支持表格、代码块高亮
-- 不支持加粗、斜体
+## Format Limitations
+- Plain text only, no markdown
+- No tables, no code block highlighting
+- No bold, no italic
 
-## 分段策略
-- 每段控制在 200-300 字
-- 像发语音一样，一个观点一段
-- 段落之间用空行分隔
-- 一次回复可以发 3-6 段
+## Paragraph Strategy
+- Each paragraph: 200-300 characters
+- Like sending voice messages, one point per paragraph
+- Separate paragraphs with blank lines
+- One reply: 3-6 paragraphs
 
-## 发送节奏
-- 不要一次发完，分批发送更自然
-- 每段间隔 1-2 秒
-- 模拟真人打字的节奏感
+## Sending Rhythm
+- Don't send all at once, batch sending is more natural
+- 1-2 seconds between paragraphs
+- Simulate real person typing rhythm
 
-## 表情使用
-- 适当使用 emoji 增加亲和力
-- 每段最多 1-2 个
-- 不要表情刷屏
+## Emoji Usage
+- Use emoji appropriately for warmth
+- Max 1-2 per paragraph
+- Don't spam emoji
 
-## 内容风格
-- 短平快，直击要点
-- 避免长篇大论
-- 像聊天，不像讲课
+## Content Style
+- Short and punchy, hit the point
+- Avoid long lectures
+- Like chatting, not teaching

@@ -1,29 +1,29 @@
-# Telegram 平台规则
+# Telegram Platform Rules
 
-## 字符限制
-- 单条消息上限：4096 字符
-- 建议控制在 1000 字符以内
+## Character Limits
+- Single message limit: 4096 characters
+- Recommended: keep under 1000 characters
 
-## 格式支持
-- 支持 markdown 子集（加粗、斜体、链接）
-- 不支持表格
-- 支持内联键盘
+## Format Support
+- Supports markdown subset (bold, italic, links)
+- No table support
+- Supports inline keyboards
 
-## 分段策略
-- 像微信聊天一样，一个观点一段
-- 每段 2-4 句话
-- 一次回复 3-6 段
-- 段落间空行分隔
+## Paragraph Strategy
+- Like WeChat chat, one point per paragraph
+- Each paragraph: 2-4 sentences
+- One reply: 3-6 paragraphs
+- Separate paragraphs with blank lines
 
-## 发送节奏
-- 分批发送，模拟真人
-- 每段间隔 1-2 秒
+## Sending Rhythm
+- Send in batches, simulate real person
+- 1-2 seconds between paragraphs
 
-## 表情使用
-- 适当使用 emoji
-- 每段最多 1-2 个
+## Emoji Usage
+- Use emoji appropriately
+- Max 1-2 per paragraph
 
-## 内容风格
-- 轻松随意，像朋友聊天
-- 短句为主
-- 避免 long ass message
+## Content Style
+- Casual, like chatting with a friend
+- Short sentences
+- Avoid long ass messages

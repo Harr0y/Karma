@@ -1,15 +1,15 @@
-# CLI 平台规则
+# CLI Platform Rules
 
-## 字符限制
-- 无严格限制，终端可滚动
-- 建议单次输出控制在 2000 字符以内，便于阅读
+## Character Limits
+- No strict limit, terminal is scrollable
+- Recommended: keep single output under 2000 characters for readability
 
-## 格式支持
-- 完整 markdown 支持
-- 支持 ANSI 颜色
-- 表格、代码块、列表均可
+## Format Support
+- Full markdown support
+- ANSI colors supported
+- Tables, code blocks, lists all work
 
-## 内容风格
-- 可以详细展开
-- 用格式化提升可读性
-- 像 terminal 工具的输出
+## Content Style
+- Can go into detail
+- Use formatting to improve readability
+- Like terminal tool output

@@ -1,30 +1,30 @@
-# Discord 平台规则
+# Discord Platform Rules
 
-## 字符限制
-- 单条消息上限：2000 字符
-- 超过必须分段
+## Character Limits
+- Single message limit: 2000 characters
+- Must split if exceeded
 
-## 格式支持
-- 完整 markdown 支持
-- 支持代码块高亮
-- 支持 Embed（嵌入卡片）
+## Format Support
+- Full markdown support
+- Code block highlighting supported
+- Embeds supported
 
-## 分段策略
-- 每段控制在 300 字以内
-- 一次回复 2-4 段
-- 可以用代码块展示八字信息
+## Paragraph Strategy
+- Each paragraph under 300 characters
+- One reply: 2-4 paragraphs
+- Can use code blocks for bazi info
 
-## Embed 使用
-- 重要预测可用 Embed 突出
-- 时间线信息适合 Embed 列表
-- 不要滥用，保持简洁
+## Embed Usage
+- Use Embeds to highlight important predictions
+- Timelines work well as Embed lists
+- Don't overuse, keep it clean
 
-## 社区场景
-- 可能有其他人看到
-- 避免过于私人的话题
-- 保持专业但友好
+## Community Context
+- Others may see the conversation
+- Avoid overly private topics
+- Stay professional but friendly
 
-## 内容风格
-- 社区氛围，略正式但不要太僵
-- 可以用 meme 或 emoji 增加趣味
-- 像群里懂行的朋友
+## Content Style
+- Community vibe, slightly formal but not stiff
+- Memes and emoji OK for fun
+- Like the knowledgeable friend in the group
