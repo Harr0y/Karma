@@ -1,8 +1,23 @@
 # Karma Dockerfile
 # Multi-stage build for production deployment
 
+# Build arguments for proxy (optional)
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
 # Stage 1: Build
 FROM node:20-alpine AS builder
+
+# Re-declare ARG after FROM
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+# Set proxy environment variables
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
 
 # Install build dependencies for better-sqlite3
 RUN apk add --no-cache python3 make g++ git
