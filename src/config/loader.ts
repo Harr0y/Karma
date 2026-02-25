@@ -6,6 +6,15 @@ import { homedir } from 'os';
 import { parse } from 'yaml';
 import { getLogger } from '@/logger/index.js';
 
+export interface TelegramConfigType {
+  botToken: string;
+  webhookSecret: string;
+  enabled?: boolean;
+  maxMessageLength?: number;
+  apiRetryAttempts?: number;
+  apiRetryDelay?: number;
+}
+
 export interface KarmaConfig {
   server: {
     host: string;
@@ -29,6 +38,7 @@ export interface KarmaConfig {
     level: 'debug' | 'info' | 'warn' | 'error';
     file: string;
   };
+  telegram?: TelegramConfigType;
 }
 
 const DEFAULT_CONFIG: KarmaConfig = {
