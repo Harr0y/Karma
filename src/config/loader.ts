@@ -134,26 +134,9 @@ export function loadConfig(): KarmaConfig {
     }
   }
 
-  // 环境变量直接覆盖 (优先级最高)
-  if (process.env.ANTHROPIC_AUTH_TOKEN) {
-    config.ai.authToken = process.env.ANTHROPIC_AUTH_TOKEN;
-  }
-  if (process.env.ANTHROPIC_BASE_URL) {
-    config.ai.baseUrl = process.env.ANTHROPIC_BASE_URL;
-  }
-  if (process.env.ANTHROPIC_MODEL) {
-    config.ai.model = process.env.ANTHROPIC_MODEL;
-  }
-  if (process.env.KARMA_SERVER_HOST) {
-    config.server.host = process.env.KARMA_SERVER_HOST;
-  }
-  if (process.env.KARMA_SERVER_PORT) {
-    config.server.port = parseInt(process.env.KARMA_SERVER_PORT, 10);
-  }
-
   // 验证必要配置
   if (!config.ai.authToken) {
-    logger.warn('未设置 ANTHROPIC_AUTH_TOKEN', { operation: 'config_warning' });
+    logger.warn('未设置 API authToken', { operation: 'config_warning' });
   }
 
   return config;

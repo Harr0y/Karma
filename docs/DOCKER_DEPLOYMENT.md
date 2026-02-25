@@ -47,8 +47,16 @@ curl http://localhost:3000/health
 ### 2.1 配置优先级
 
 ```
-命令行参数 > 环境变量 > 配置文件 > 默认值
+配置文件 > 默认值
 ```
+
+**说明：**
+- 配置文件是主要配置源
+- 配置文件中可使用 `${ENV_VAR:default}` 语法引用环境变量
+- 例如：`authToken: ${ANTHROPIC_AUTH_TOKEN:}` 表示：
+  - 如果 `ANTHROPIC_AUTH_TOKEN` 环境变量存在，使用它
+  - 否则使用空字符串
+- 命令行参数 `--host` / `--port` 可以覆盖配置文件
 
 ### 2.2 配置文件
 
