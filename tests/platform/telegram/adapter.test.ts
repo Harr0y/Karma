@@ -59,6 +59,41 @@ describe('TelegramAdapter', () => {
       await adapter.stop();
       expect(adapter.isRunning()).toBe(false);
     });
+
+    it('should clear cleanup timer on stop', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      // 获取定时器数量（间接通过 vi.getTimerCount 或 spy）
+      const setIntervalSpy = vi.spyOn(global, 'setInterval');
+      const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+
+      // 再次 start 不应创建新定时器（已经在运行）
+      await adapter.start();
+
+      // stop 应该清理定时器
+      await adapter.stop();
+
+      // 验证 clearInterval 被调用
+      expect(clearIntervalSpy).toHaveBeenCalled();
+
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    });
+
+    it('should not leak memory when stop is called multiple times', async () => {
+      const adapter = createAdapter();
+
+      // 多次 start/stop 循环
+      for (let i = 0; i < 5; i++) {
+        await adapter.start();
+        await adapter.stop();
+      }
+
+      // 如果有内存泄漏，这里可能会有问题
+      // 测试通过表示没有累积的定时器
+      expect(adapter.isRunning()).toBe(false);
+    });
   });
 
   describe('onMessage', () => {

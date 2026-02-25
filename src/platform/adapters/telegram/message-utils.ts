@@ -131,13 +131,12 @@ export async function callTelegramApi<T = unknown>(
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // 检查是否应该重试
-      const shouldRetry = await shouldRetryRequest(error, attempt, retryAttempts);
-      if (!shouldRetry) {
+      if (!shouldRetryRequest(error, attempt, retryAttempts)) {
         throw lastError;
       }
 
       // 计算退避时间
-      const backoffMs = await getRetryDelay(error, attempt, retryDelay);
+      const backoffMs = getRetryDelay(error, attempt, retryDelay);
       await delay(backoffMs);
     }
   }
@@ -147,12 +146,13 @@ export async function callTelegramApi<T = unknown>(
 
 /**
  * 判断是否应该重试请求
+ * 注意：此函数保持同步，因为所有检查逻辑都是同步的
  */
-async function shouldRetryRequest(
+function shouldRetryRequest(
   error: unknown,
   attempt: number,
   maxAttempts: number
-): Promise<boolean> {
+): boolean {
   if (attempt >= maxAttempts) {
     return false;
   }
@@ -193,12 +193,13 @@ async function shouldRetryRequest(
 
 /**
  * 获取重试延迟时间
+ * 注意：此函数保持同步，因为所有检查逻辑都是同步的
  */
-async function getRetryDelay(
+function getRetryDelay(
   error: unknown,
   attempt: number,
   baseDelay: number
-): Promise<number> {
+): number {
   // 检查 Retry-After header
   if (error instanceof Response) {
     const retryAfter = error.headers?.get('retry-after');

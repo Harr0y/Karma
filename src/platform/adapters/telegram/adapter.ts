@@ -25,6 +25,7 @@ export class TelegramAdapter implements PlatformAdapter {
 
   // update_id 去重缓存
   private processedUpdates = new Map<number, number>();
+  private cleanupTimer?: ReturnType<typeof setInterval>;
 
   constructor(config: TelegramConfig) {
     this.config = {
@@ -64,6 +65,13 @@ export class TelegramAdapter implements PlatformAdapter {
    */
   async stop(): Promise<void> {
     this.running = false;
+
+    // 清理去重定时器
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
+
     this.processedUpdates.clear();
     this.logger.info('Telegram 适配器已停止', { operation: 'stop' });
   }
@@ -271,7 +279,7 @@ export class TelegramAdapter implements PlatformAdapter {
    * 启动去重缓存清理定时器
    */
   private startDeduplicationCleanup(): void {
-    setInterval(() => {
+    this.cleanupTimer = setInterval(() => {
       this.cleanupOldUpdates();
     }, 60000); // 每分钟清理一次
   }
