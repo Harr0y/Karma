@@ -15,6 +15,7 @@ import {
 } from './info-extractor.js';
 import { getLogger } from '@/logger/index.js';
 import type { Logger } from '@/logger/types.js';
+import { createKarmaMcpServer } from '@/tools/registry.js';
 
 export interface AgentRunnerConfig {
   storage: StorageService;
@@ -135,6 +136,9 @@ export class AgentRunner {
       cwd: process.cwd(),
       env,
       abortController,
+      mcpServers: {
+        'karma-tools': createKarmaMcpServer(),
+      },
     };
 
     let q;

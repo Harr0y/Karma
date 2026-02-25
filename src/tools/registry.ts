@@ -1,6 +1,8 @@
 // Karma Tools - 自定义工具注册
-// 这些工具可以通过 prompt 引导 Agent 使用
+// 使用 SDK 的 createSdkMcpServer 注册工具
 
+import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
 import { calculateBazi, formatBaziResult } from './bazi-calculator.js';
 import type { BaziInput } from './bazi-calculator.js';
 
@@ -79,6 +81,7 @@ export async function executeTool(
 
 /**
  * 生成工具说明文本（用于 prompt）
+ * 注意：现在工具已通过 MCP 注册，此函数仅作为备用文档
  */
 export function generateToolsPrompt(): string {
   const toolDescriptions = karmaTools.map((tool) => {
@@ -114,4 +117,60 @@ ${toolDescriptions.join('\n')}
 \`\`\`
 
 工具会返回格式化的八字信息，你可以在后续对话中使用这些信息。`;
+}
+
+/**
+ * 创建 Karma MCP Server
+ * 使用 SDK 的 createSdkMcpServer 注册工具
+ */
+export function createKarmaMcpServer() {
+  // 定义八字排盘工具的 schema
+  const baziSchema = {
+    birthDate: z.string().describe('公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）'),
+    gender: z.enum(['male', 'female']).describe('性别：male（男）或 female（女）'),
+  };
+
+  // 创建 SDK 工具
+  const baziTool = tool(
+    'bazi_calculator',
+    '根据生辰信息排八字命盘，返回四柱、大运、流年、纳音等信息。当你获取到客户的完整生辰信息后，使用此工具进行排盘。',
+    baziSchema,
+    async (args, _extra) => {
+      try {
+        const baziInput: BaziInput = {
+          birthDate: args.birthDate,
+          gender: args.gender,
+        };
+
+        const result = await calculateBazi(baziInput);
+        const formatted = formatBaziResult(result);
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: formatted,
+            },
+          ],
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `八字排盘失败: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // 创建并返回 MCP Server
+  return createSdkMcpServer({
+    name: 'karma-tools',
+    version: '1.0.0',
+    tools: [baziTool],
+  });
 }
