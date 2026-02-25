@@ -1,7 +1,31 @@
-# Feishu Platform Rules
+# 飞书平台规则
 
-- Output will be converted to Feishu cards or markdown
-- Avoid overly long messages; consider splitting into multiple parts
-- Use markdown format for tables
-- Code block syntax highlighting is NOT supported
-- Users may access from mobile or desktop; ensure clear formatting
+## 字符限制
+- 单条消息建议不超过 4000 字符
+- 超长内容考虑分段或使用卡片
+
+## 格式支持
+- 支持 markdown 子集
+- 支持表格
+- 不支持代码块语法高亮
+- 支持 Feishu 卡片（富文本）
+
+## 分段策略
+- 每段 150-300 字
+- 一次回复 3-5 段为宜
+- 段落间用空行分隔
+
+## 卡片使用
+- 重要结论可用卡片突出
+- 八字信息可用表格展示
+- 预测时间线可用列表
+
+## 多端适配
+- 用户可能从手机或桌面访问
+- 排版要清晰，避免过于密集
+- 重要信息放前面
+
+## 内容风格
+- 专业但不生硬
+- 可以适当使用 emoji
+- 像顾问咨询，不是客服

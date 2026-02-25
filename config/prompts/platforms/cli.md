@@ -1,6 +1,15 @@
-# CLI Platform Rules
+# CLI 平台规则
 
-- Direct terminal output, supports ANSI colors
-- Long replies are acceptable without length limits
-- Use markdown format (tables, lists, code blocks)
-- Multi-line output supported
+## 字符限制
+- 无严格限制，终端可滚动
+- 建议单次输出控制在 2000 字符以内，便于阅读
+
+## 格式支持
+- 完整 markdown 支持
+- 支持 ANSI 颜色
+- 表格、代码块、列表均可
+
+## 内容风格
+- 可以详细展开
+- 用格式化提升可读性
+- 像 terminal 工具的输出
