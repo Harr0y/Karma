@@ -65,7 +65,9 @@ describe('Integration: WebSearch Real API', () => {
     });
   });
 
-  describe('formatSearchResult with real data', () => {
+  describe('formatSearchResult with real data', { timeout: 30000 }, () => {
+    it.skipIf(process.env.SKIP_INTEGRATION_TESTS === 'true', 'skipped due to SKIP_INTEGRATION_TESTS');
+
     it('should format results from real API call', async () => {
       const result = await webSearch('JavaScript');
       const formatted = formatSearchResult(result);
