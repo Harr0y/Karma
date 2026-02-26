@@ -1,5 +1,6 @@
 // Telegram Message Utilities - 消息处理工具
 
+import { ProxyAgent, request, setGlobalDispatcher } from 'undici';
 import type { TelegramApiResponse } from './types.js';
 
 /**
@@ -9,6 +10,17 @@ export interface ApiCallOptions {
   retryAttempts?: number;
   retryDelay?: number;
 }
+
+// 初始化全局代理
+function initProxy(): void {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+  if (proxyUrl) {
+    setGlobalDispatcher(new ProxyAgent(proxyUrl));
+  }
+}
+
+// 模块加载时初始化代理
+initProxy();
 
 /**
  * HTML 转义
@@ -111,7 +123,8 @@ export async function callTelegramApi<T = unknown>(
 
   for (let attempt = 0; attempt <= retryAttempts; attempt++) {
     try {
-      const response = await fetch(url, {
+      // 使用 undici 的 request 函数（已配置全局代理）
+      const response = await request(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -119,7 +132,7 @@ export async function callTelegramApi<T = unknown>(
         body: JSON.stringify(params),
       });
 
-      const data: TelegramApiResponse<T> = await response.json();
+      const data: TelegramApiResponse<T> = await response.body.json() as TelegramApiResponse<T>;
 
       // API 返回错误
       if (!data.ok) {
