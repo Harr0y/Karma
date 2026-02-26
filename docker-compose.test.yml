@@ -1,0 +1,41 @@
+# Docker Compose - 测试环境
+# 使用方式: docker-compose -f docker-compose.test.yml up
+#
+# 与生产环境的区别:
+# - 端口: 3004 (vs 3000)
+# - Volume: karma-test-data (vs karma-data)
+# - 配置文件: config.test.yaml (vs config.yaml)
+
+services:
+  karma:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: karma-api-test
+    restart: unless-stopped
+    ports:
+      - "3004:3000"
+    environment:
+      # GLM API 配置
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://open.bigmodel.cn/api/anthropic}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-glm-5}
+      # 存储路径 (容器内)
+      - HOME=/home/karma
+      # 环境标识
+      - NODE_ENV=test
+    volumes:
+      # 持久化数据库 (测试环境独立)
+      - karma-test-data:/home/karma/.karma
+      # 配置文件 (测试环境专用)
+      - ./config.test.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  karma-test-data:
+    driver: local

@@ -1,5 +1,9 @@
 # Karma 配置文件
 # 复制此文件到 ~/.karma/config.yaml 或 ./config.yaml
+#
+# 环境区分:
+# - 生产环境: 使用此文件 (config.yaml)
+# - 测试环境: 使用 config.test.yaml (见 config.test.example.yaml)
 
 # 服务器配置
 server:
