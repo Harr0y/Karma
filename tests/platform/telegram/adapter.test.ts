@@ -13,10 +13,10 @@ global.fetch = mockFetch;
 describe('TelegramAdapter', () => {
   const defaultConfig = {
     botToken: 'test-bot-token',
-    webhookSecret: 'test-webhook-secret',
     maxMessageLength: 4096,
     apiRetryAttempts: 3,
     apiRetryDelay: 100,
+    pollingInterval: 100,
   };
 
   const createAdapter = (config = defaultConfig) => {
@@ -49,6 +49,13 @@ describe('TelegramAdapter', () => {
   describe('start/stop', () => {
     it('should set running to true after start', async () => {
       const adapter = createAdapter();
+
+      // Mock getUpdates to return empty array
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, result: [] }),
+      });
+
       await adapter.start();
       expect(adapter.isRunning()).toBe(true);
     });
@@ -105,9 +112,29 @@ describe('TelegramAdapter', () => {
     });
   });
 
-  describe('parseMessage', () => {
-    it('should parse normal text message correctly', async () => {
+  describe('Polling mode', () => {
+    it('should poll for updates after start', async () => {
       const adapter = createAdapter();
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, result: [] }),
+      });
+
+      await adapter.start();
+
+      // 推进时间触发 polling
+      await vi.advanceTimersByTimeAsync(150);
+
+      // getUpdates 应该被调用
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('getUpdates'),
+        expect.any(Object)
+      );
+    });
+
+    it('should process messages from polling', async () => {
+      const adapter = createAdapter({ ...defaultConfig, pollingInterval: 50 });
       const receivedMessages: IncomingMessage[] = [];
       adapter.onMessage((msg) => receivedMessages.push(msg));
 
@@ -130,7 +157,16 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      await adapter.handleWebhook(update, defaultConfig.webhookSecret);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: [update] }),
+      }).mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, result: [] }),
+      });
+
+      await adapter.start();
+      await vi.advanceTimersByTimeAsync(100);
 
       expect(receivedMessages).toHaveLength(1);
       expect(receivedMessages[0]).toMatchObject({
@@ -143,8 +179,8 @@ describe('TelegramAdapter', () => {
       });
     });
 
-    it('should filter bot messages', async () => {
-      const adapter = createAdapter();
+    it('should filter bot messages in polling', async () => {
+      const adapter = createAdapter({ ...defaultConfig, pollingInterval: 50 });
       const receivedMessages: IncomingMessage[] = [];
       adapter.onMessage((msg) => receivedMessages.push(msg));
 
@@ -167,7 +203,16 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      await adapter.handleWebhook(update, defaultConfig.webhookSecret);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: [update] }),
+      }).mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, result: [] }),
+      });
+
+      await adapter.start();
+      await vi.advanceTimersByTimeAsync(100);
 
       expect(receivedMessages).toHaveLength(0);
     });
@@ -175,7 +220,7 @@ describe('TelegramAdapter', () => {
 
   describe('update_id deduplication', () => {
     it('should detect duplicate update_id', async () => {
-      const adapter = createAdapter();
+      const adapter = createAdapter({ ...defaultConfig, pollingInterval: 50 });
       const receivedMessages: IncomingMessage[] = [];
       adapter.onMessage((msg) => receivedMessages.push(msg));
 
@@ -197,16 +242,32 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      // Send same update twice
-      await adapter.handleWebhook(update, defaultConfig.webhookSecret);
-      await adapter.handleWebhook(update, defaultConfig.webhookSecret);
+      // 第一次返回 update，之后返回空
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: [update] }),
+      }).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: [] }),
+      }).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: [update] }), // 重复的 update
+      }).mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, result: [] }),
+      });
 
+      await adapter.start();
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
+
+      // 即使收到两次相同的 update，也只处理一次
       expect(receivedMessages).toHaveLength(1);
       expect(receivedMessages[0].text).toBe('First message');
     });
 
     it('should allow update_id after TTL expires', async () => {
-      const adapter = createAdapter({ ...defaultConfig, deduplicationTTL: 1000 }); // 1 second TTL
+      const adapter = createAdapter({ ...defaultConfig, deduplicationTTL: 1000, pollingInterval: 50 });
       const receivedMessages: IncomingMessage[] = [];
       adapter.onMessage((msg) => receivedMessages.push(msg));
 
@@ -228,75 +289,21 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      // First call
-      await adapter.handleWebhook(update, defaultConfig.webhookSecret);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, result: [update] }),
+      });
+
+      await adapter.start();
+      await vi.advanceTimersByTimeAsync(100);
       expect(receivedMessages).toHaveLength(1);
 
       // Advance past TTL
       vi.advanceTimersByTime(1500);
 
       // Second call should process again
-      await adapter.handleWebhook(update, defaultConfig.webhookSecret);
+      await vi.advanceTimersByTimeAsync(100);
       expect(receivedMessages).toHaveLength(2);
-    });
-  });
-
-  describe('Webhook Secret validation', () => {
-    it('should accept valid webhook secret', async () => {
-      const adapter = createAdapter();
-      const receivedMessages: IncomingMessage[] = [];
-      adapter.onMessage((msg) => receivedMessages.push(msg));
-
-      const update: TelegramUpdate = {
-        update_id: 11111,
-        message: {
-          message_id: 300,
-          from: {
-            id: 111,
-            is_bot: false,
-            first_name: 'Test',
-          },
-          chat: {
-            id: 222,
-            type: 'private',
-          },
-          date: Math.floor(Date.now() / 1000),
-          text: 'Valid secret',
-        },
-      };
-
-      await adapter.handleWebhook(update, defaultConfig.webhookSecret);
-      expect(receivedMessages).toHaveLength(1);
-    });
-
-    it('should reject invalid webhook secret', async () => {
-      const adapter = createAdapter();
-      const receivedMessages: IncomingMessage[] = [];
-      adapter.onMessage((msg) => receivedMessages.push(msg));
-
-      const update: TelegramUpdate = {
-        update_id: 11112,
-        message: {
-          message_id: 301,
-          from: {
-            id: 111,
-            is_bot: false,
-            first_name: 'Test',
-          },
-          chat: {
-            id: 222,
-            type: 'private',
-          },
-          date: Math.floor(Date.now() / 1000),
-          text: 'Invalid secret',
-        },
-      };
-
-      await expect(
-        adapter.handleWebhook(update, 'wrong-secret')
-      ).rejects.toThrow('Invalid webhook secret');
-
-      expect(receivedMessages).toHaveLength(0);
     });
   });
 

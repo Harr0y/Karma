@@ -38,8 +38,9 @@ logging:
 # Telegram 配置 (可选)
 telegram:
   botToken: ${TELEGRAM_BOT_TOKEN:}           # Bot Token (from BotFather)
-  webhookSecret: ${TELEGRAM_WEBHOOK_SECRET:} # Webhook Secret Token
   enabled: false                              # 是否启用 Telegram 适配器
   maxMessageLength: 4096                      # 最大消息长度
   apiRetryAttempts: 3                         # API 重试次数
   apiRetryDelay: 1000                         # API 重试延迟 (毫秒)
+  pollingInterval: 1000                       # Polling 轮询间隔 (毫秒)
+  pollingTimeout: 30                          # Long polling 超时 (秒)

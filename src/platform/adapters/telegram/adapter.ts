@@ -13,7 +13,7 @@ import type { Logger } from '@/logger/types.js';
 
 /**
  * Telegram 平台适配器
- * 实现 PlatformAdapter 接口，支持 Webhook 模式
+ * 实现 PlatformAdapter 接口，支持 Polling 模式
  */
 export class TelegramAdapter implements PlatformAdapter {
   readonly platform = 'telegram' as const;
@@ -27,6 +27,11 @@ export class TelegramAdapter implements PlatformAdapter {
   private processedUpdates = new Map<number, number>();
   private cleanupTimer?: ReturnType<typeof setInterval>;
 
+  // Polling 相关
+  private pollingTimer?: ReturnType<typeof setInterval>;
+  private lastUpdateId = 0;
+  private isPolling = false;
+
   constructor(config: TelegramConfig) {
     this.config = {
       enabled: true,
@@ -34,6 +39,8 @@ export class TelegramAdapter implements PlatformAdapter {
       apiRetryAttempts: 3,
       apiRetryDelay: 1000,
       deduplicationTTL: 3600000, // 1 hour default
+      pollingInterval: 1000, // 1 second default
+      pollingTimeout: 30, // 30 seconds long polling
       ...config,
     };
     this.logger = getLogger().child({ module: 'platform' });
@@ -51,11 +58,14 @@ export class TelegramAdapter implements PlatformAdapter {
       return;
     }
 
-    this.logger.info('启动 Telegram 适配器', { operation: 'start' });
+    this.logger.info('启动 Telegram 适配器 (Polling 模式)', { operation: 'start' });
     this.running = true;
 
     // 启动去重清理定时器
     this.startDeduplicationCleanup();
+
+    // 启动 Polling
+    this.startPolling();
 
     this.logger.info('Telegram 适配器已启动', { operation: 'started' });
   }
@@ -65,6 +75,12 @@ export class TelegramAdapter implements PlatformAdapter {
    */
   async stop(): Promise<void> {
     this.running = false;
+
+    // 清理 Polling 定时器
+    if (this.pollingTimer) {
+      clearInterval(this.pollingTimer);
+      this.pollingTimer = undefined;
+    }
 
     // 清理去重定时器
     if (this.cleanupTimer) {
@@ -91,42 +107,102 @@ export class TelegramAdapter implements PlatformAdapter {
   }
 
   /**
-   * 处理 Webhook 请求
+   * 启动 Polling 轮询
    */
-  async handleWebhook(update: TelegramUpdate, secretToken?: string): Promise<void> {
-    // 1. 验证 Webhook Secret
-    if (secretToken && secretToken !== this.config.webhookSecret) {
-      throw new Error('Invalid webhook secret');
-    }
+  private startPolling(): void {
+    // 立即执行一次
+    this.poll();
 
-    // 2. 去重检查
-    if (this.isDuplicateUpdate(update.update_id)) {
-      this.logger.debug('跳过重复 update', {
-        operation: 'webhook_skip',
-        metadata: { updateId: update.update_id, reason: 'duplicate' },
-      });
+    // 设置定时轮询
+    this.pollingTimer = setInterval(() => {
+      this.poll();
+    }, this.config.pollingInterval);
+  }
+
+  /**
+   * 执行一次 Polling 请求
+   */
+  private async poll(): Promise<void> {
+    // 防止重叠请求
+    if (this.isPolling || !this.running) {
       return;
     }
 
-    // 3. 标记已处理
-    this.markProcessed(update.update_id);
+    this.isPolling = true;
 
-    // 4. 解析消息
-    const message = this.parseUpdate(update);
-    if (!message) {
-      return;
-    }
+    try {
+      const updates = await this.getUpdates();
 
-    // 5. 分发给处理器
-    for (const handler of this.messageHandlers) {
-      try {
-        await handler(message);
-      } catch (err) {
-        this.logger.error('消息处理错误', err instanceof Error ? err : undefined, {
-          operation: 'handler_error',
-          metadata: { messageId: message.id },
-        });
+      for (const update of updates) {
+        // 更新 lastUpdateId
+        if (update.update_id > this.lastUpdateId) {
+          this.lastUpdateId = update.update_id;
+        }
+
+        // 去重检查
+        if (this.isDuplicateUpdate(update.update_id)) {
+          this.logger.debug('跳过重复 update', {
+            operation: 'polling_skip',
+            metadata: { updateId: update.update_id, reason: 'duplicate' },
+          });
+          continue;
+        }
+
+        // 标记已处理
+        this.markProcessed(update.update_id);
+
+        // 解析消息
+        const message = this.parseUpdate(update);
+        if (!message) {
+          continue;
+        }
+
+        // 分发给处理器
+        for (const handler of this.messageHandlers) {
+          try {
+            await handler(message);
+          } catch (err) {
+            this.logger.error('消息处理错误', err instanceof Error ? err : undefined, {
+              operation: 'handler_error',
+              metadata: { messageId: message.id },
+            });
+          }
+        }
       }
+    } catch (err) {
+      this.logger.error('Polling 错误', err instanceof Error ? err : undefined, {
+        operation: 'polling_error',
+      });
+    } finally {
+      this.isPolling = false;
+    }
+  }
+
+  /**
+   * 调用 getUpdates API 获取新消息
+   */
+  private async getUpdates(): Promise<TelegramUpdate[]> {
+    try {
+      const result = await callTelegramApi<TelegramUpdate[]>(
+        this.config.botToken,
+        'getUpdates',
+        {
+          offset: this.lastUpdateId + 1, // 只获取比 lastUpdateId 大的更新
+          timeout: this.config.pollingTimeout,
+          allowed_updates: ['message', 'edited_message', 'channel_post', 'edited_channel_post'],
+        },
+        {
+          retryAttempts: 2,
+          retryDelay: this.config.apiRetryDelay,
+        }
+      );
+
+      return result;
+    } catch (err) {
+      this.logger.error('getUpdates API 调用失败', err instanceof Error ? err : undefined, {
+        operation: 'get_updates_error',
+      });
+      return [];
     }
   }
 

@@ -6,8 +6,6 @@
 export interface TelegramConfig {
   /** Bot Token (from BotFather) */
   botToken: string;
-  /** Webhook Secret Token (用于验证请求来源) */
-  webhookSecret: string;
   /** 是否启用 */
   enabled?: boolean;
   /** 最大消息长度 (Telegram 限制 4096) */
@@ -18,6 +16,10 @@ export interface TelegramConfig {
   apiRetryDelay?: number;
   /** 去重 TTL (毫秒) */
   deduplicationTTL?: number;
+  /** Polling 轮询间隔 (毫秒, 默认 1000) */
+  pollingInterval?: number;
+  /** Polling 超时时间 (毫秒, 默认 30 秒, long polling) */
+  pollingTimeout?: number;
 }
 
 /**

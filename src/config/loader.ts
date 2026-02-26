@@ -8,11 +8,12 @@ import { getLogger } from '@/logger/index.js';
 
 export interface TelegramConfigType {
   botToken: string;
-  webhookSecret: string;
   enabled?: boolean;
   maxMessageLength?: number;
   apiRetryAttempts?: number;
   apiRetryDelay?: number;
+  pollingInterval?: number;
+  pollingTimeout?: number;
 }
 
 export interface KarmaConfig {
