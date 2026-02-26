@@ -12,6 +12,15 @@ const FILTER_TAGS = [
 ] as const;
 
 /**
+ * 需要完全过滤的标签（内容也过滤）
+ */
+const FULL_FILTER_TAGS = [
+  'client_info',
+  'confirmed_fact',
+  'prediction',
+] as const;
+
+/**
  * 匹配开始标签的正则表达式
  * 支持 <tag> 和 <tag attr="value"> 两种格式
  */
@@ -19,6 +28,18 @@ const START_TAG_REGEX = new RegExp(
   `<(${FILTER_TAGS.join('|')})(?:\\s+[^>]*)?>`,
   'g'
 );
+
+/**
+ * MonologueFilter 选项
+ */
+export interface MonologueFilterOptions {
+  /**
+   * 是否保留 inner_monologue 的内容（去掉标签）
+   * 默认 false（完全过滤）
+   * 设为 true 时，inner_monologue 内容会输出但标签会被移除
+   */
+  keepInnerMonologue?: boolean;
+}
 
 /**
  * 过滤器 - 过滤流式文本中的内部标签
@@ -32,6 +53,11 @@ export class MonologueFilter {
   private buffer = '';
   private insideTag: string | null = null;
   private hasOutput = false;
+  private keepInnerMonologue: boolean;
+
+  constructor(options: MonologueFilterOptions = {}) {
+    this.keepInnerMonologue = options.keepInnerMonologue ?? false;
+  }
 
   /**
    * 处理一段文本，过滤所有内部标签
@@ -47,14 +73,33 @@ export class MonologueFilter {
         // 在标签内部，查找结束标签
         const endTag = `</${this.insideTag}>`;
         const endIdx = this.buffer.indexOf(endTag);
+
         if (endIdx !== -1) {
+          // 如果是 inner_monologue 且 keepInnerMonologue 为 true，输出内容
+          if (this.insideTag === 'inner_monologue' && this.keepInnerMonologue) {
+            const content = this.buffer.slice(0, endIdx);
+            output.push(content);
+          }
+          // 其他情况：完全过滤（不输出内容）
           this.buffer = this.buffer.slice(endIdx + endTag.length);
           this.insideTag = null;
         } else {
-          // 结束标签可能还没到，保留尾部（可能是部分标签）
-          const keepLen = endTag.length;
-          if (this.buffer.length > keepLen) {
-            this.buffer = this.buffer.slice(-keepLen);
+          // 结束标签可能还没到
+          // 如果是 inner_monologue 且 keepInnerMonologue 为 true，可以输出安全部分
+          if (this.insideTag === 'inner_monologue' && this.keepInnerMonologue) {
+            // 保留尾部（可能是部分结束标签）
+            const keepLen = endTag.length;
+            if (this.buffer.length > keepLen) {
+              const safeContent = this.buffer.slice(0, -keepLen);
+              output.push(safeContent);
+              this.buffer = this.buffer.slice(-keepLen);
+            }
+          } else {
+            // 完全过滤：保留尾部（可能是部分标签）
+            const keepLen = endTag.length;
+            if (this.buffer.length > keepLen) {
+              this.buffer = this.buffer.slice(-keepLen);
+            }
           }
           break;
         }

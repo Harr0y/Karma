@@ -10,8 +10,8 @@ import { buildSystemPrompt } from '@/prompt/builder.js';
 import { MonologueFilter } from './monologue-filter.js';
 import {
   extractClientInfo,
-  extractFact,
-  extractPrediction,
+  extractAllFacts,
+  extractAllPredictions,
 } from './info-extractor.js';
 import { getLogger } from '@/logger/index.js';
 import type { Logger } from '@/logger/types.js';
@@ -153,7 +153,8 @@ export class AgentRunner {
     }
 
     // 4. 处理流式消息
-    const filter = new MonologueFilter();
+    // keepInnerMonologue: true - 保留 inner_monologue 内容用于调试和日志
+    const filter = new MonologueFilter({ keepInnerMonologue: true });
     let msgCount = 0;
     let assistantContent = ''; // 收集助手响应（过滤后）
     let rawContent = ''; // 收集原始响应（用于提取信息）
@@ -295,34 +296,38 @@ export class AgentRunner {
       await this.handleClientInfo(clientInfo, session);
     }
 
-    // 2. 提取确认的事实
-    const fact = extractFact(rawContent);
-    if (fact && session.clientId) {
-      await storage.addConfirmedFact({
-        clientId: session.clientId,
-        sessionId: session.id,
-        fact: fact.fact,
-        category: fact.category,
-        confirmed: true,
-      });
+    // 2. 提取所有确认的事实
+    const facts = extractAllFacts(rawContent);
+    if (facts.length > 0 && session.clientId) {
+      for (const fact of facts) {
+        await storage.addConfirmedFact({
+          clientId: session.clientId,
+          sessionId: session.id,
+          fact: fact.fact,
+          category: fact.category,
+          confirmed: true,
+        });
+      }
       this.logger.debug('保存确认事实', {
         operation: 'fact_save',
-        metadata: { fact: fact.fact, category: fact.category },
+        metadata: { count: facts.length, facts: facts.map(f => f.fact) },
       });
     }
 
-    // 3. 提取预测
-    const prediction = extractPrediction(rawContent);
-    if (prediction && session.clientId) {
-      await storage.addPrediction({
-        clientId: session.clientId,
-        sessionId: session.id,
-        prediction: prediction.prediction,
-        targetYear: prediction.year,
-      });
+    // 3. 提取所有预测
+    const predictions = extractAllPredictions(rawContent);
+    if (predictions.length > 0 && session.clientId) {
+      for (const prediction of predictions) {
+        await storage.addPrediction({
+          clientId: session.clientId,
+          sessionId: session.id,
+          prediction: prediction.prediction,
+          targetYear: prediction.year,
+        });
+      }
       this.logger.debug('保存预测', {
         operation: 'prediction_save',
-        metadata: { prediction: prediction.prediction, year: prediction.year },
+        metadata: { count: predictions.length, predictions: predictions.map(p => p.prediction) },
       });
     }
   }

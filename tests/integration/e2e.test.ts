@@ -145,20 +145,21 @@ describe('E2E: CLI Agent', () => {
 
   describe('Skills Loading', () => {
     it('should load project skills', async () => {
-      // 项目 skills 目录有 3 个 skills
-      expect(skills.length).toBeGreaterThanOrEqual(3);
+      // 项目 skills 目录有 4 个 skills (methodology, examples, bazi-tools, date-parsing)
+      expect(skills.length).toBeGreaterThanOrEqual(4);
 
       const names = skills.map(s => s.name);
       expect(names).toContain('methodology');
-      expect(names).toContain('psychology');
       expect(names).toContain('examples');
+      expect(names).toContain('bazi-tools');
+      expect(names).toContain('date-parsing');
     });
 
     it('should have valid skill content', async () => {
       const methodology = skills.find(s => s.name === 'methodology');
       expect(methodology).toBeDefined();
       expect(methodology?.description).toContain('双引擎');
-      expect(methodology?.body).toContain('Timeline Reconstruction');
+      expect(methodology?.body).toContain('时间线重建');
     });
   });
 
@@ -317,8 +318,9 @@ describe('E2E: CLI Agent', () => {
 
       expect(prompt).toContain('<available_skills>');
       expect(prompt).toContain('methodology');
-      expect(prompt).toContain('psychology');
       expect(prompt).toContain('examples');
+      expect(prompt).toContain('bazi-tools');
+      expect(prompt).toContain('date-parsing');
     });
   });
 });

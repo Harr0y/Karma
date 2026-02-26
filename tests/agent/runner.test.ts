@@ -85,7 +85,7 @@ describe('AgentRunner', () => {
       expect(session.sdkSessionId).toBe('sdk-new-456');
     });
 
-    it('should filter inner_monologue from output', async () => {
+    it('should keep inner_monologue content but remove tags (keepInnerMonologue mode)', async () => {
       const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
 
       const mockQuery = vi.mocked(query);
@@ -108,8 +108,10 @@ describe('AgentRunner', () => {
         }
       }
 
-      expect(texts.join('')).toBe('Hello!');
-      expect(texts.join('')).not.toContain('inner_monologue');
+      // keepInnerMonologue: true - 内容保留，标签移除
+      expect(texts.join('')).toBe('thinking...Hello!');
+      expect(texts.join('')).not.toContain('<inner_monologue>');
+      expect(texts.join('')).not.toContain('</inner_monologue>');
     });
 
     it('should yield tool_use messages', async () => {
