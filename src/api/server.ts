@@ -13,7 +13,6 @@ import { getConfig } from '../config/index.js';
 import { getLogger, setLogger, createLogger, type Logger } from '../logger/index.js';
 import { HttpAdapter } from '../platform/adapters/http/index.js';
 import { TelegramAdapter } from '../platform/adapters/telegram/index.js';
-import type { TelegramUpdate } from '../platform/adapters/telegram/index.js';
 import type { ActiveSession } from '../session/types.js';
 import type {
   CreateSessionRequest,
@@ -122,7 +121,6 @@ export class KarmaServer {
     if (this.config.telegram?.botToken && this.config.telegram?.enabled !== false) {
       this.telegramAdapter = new TelegramAdapter({
         botToken: this.config.telegram.botToken,
-        webhookSecret: this.config.telegram.webhookSecret || '',
         enabled: this.config.telegram.enabled ?? true,
         maxMessageLength: this.config.telegram.maxMessageLength,
         apiRetryAttempts: this.config.telegram.apiRetryAttempts,
@@ -222,8 +220,6 @@ export class KarmaServer {
         await this.handleChat(req, res);
       } else if (url.startsWith('/api/history/') && method === 'GET') {
         await this.handleGetHistory(req, res, url);
-      } else if (url === '/telegram/webhook' && method === 'POST') {
-        await this.handleTelegramWebhook(req, res);
       } else if (url === '/health' || url === '/') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', service: 'karma-api' }));
@@ -427,45 +423,6 @@ export class KarmaServer {
     const error: APIError = { error: message, code };
     res.writeHead(status, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(error));
-  }
-
-  /**
-   * POST /telegram/webhook - Telegram Webhook 端点
-   */
-  private async handleTelegramWebhook(
-    req: http.IncomingMessage,
-    res: http.ServerResponse
-  ): Promise<void> {
-    if (!this.telegramAdapter) {
-      this.sendError(res, 503, 'SERVICE_UNAVAILABLE', 'Telegram adapter not configured');
-      return;
-    }
-
-    const body = await this.readBody(req);
-    if (!body) {
-      this.sendError(res, 400, 'BAD_REQUEST', 'Request body required');
-      return;
-    }
-
-    try {
-      const update: TelegramUpdate = JSON.parse(body);
-
-      // 从 header 获取 X-Telegram-Bot-Api-Secret-Token
-      const secretToken = req.headers['x-telegram-bot-api-secret-token'] as string | undefined;
-
-      await this.telegramAdapter.handleWebhook(update, secretToken);
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
-    } catch (err: any) {
-      this.logger.error('Telegram webhook 错误', err, { operation: 'telegram_webhook_error' });
-
-      if (err.message === 'Invalid webhook secret') {
-        this.sendError(res, 401, 'UNAUTHORIZED', 'Invalid webhook secret');
-      } else {
-        this.sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
   }
 
   /**
