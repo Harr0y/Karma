@@ -100,45 +100,78 @@ describe('Integration: WebSearch Real API', () => {
 });
 ```
 
+## 测试命名约定
+
+为了明确区分测试类型，使用以下命名约定：
+
+| 类型 | 命名模式 | Mock 策略 |
+|------|----------|----------|
+| 单元测试 | `*.test.ts` 或 `*.unit.test.ts` | ✅ 可以 Mock |
+| 集成测试 | `*.integration.test.ts` | ❌ 真实调用 |
+| E2E 测试 | `*.e2e.test.ts` | ❌ 全部真实 |
+
+**示例：**
+- `runner.unit.test.ts` - AgentRunner 单元测试（Mock SDK）
+- `runner.integration.test.ts` - AgentRunner 集成测试（真实 SDK）
+- `agent.e2e.test.ts` - 端到端测试（真实 LLM）
+
 ## 测试文件组织
 
 ```
 tests/
-├── agent/              # Agent 相关单元测试
+├── agent/              # Agent 相关测试
+│   ├── runner.unit.test.ts        # 单元测试（Mock SDK）
+│   ├── bazi-tool.unit.test.ts     # 单元测试（Mock SDK）
 │   ├── monologue-filter.test.ts
 │   ├── info-extractor.test.ts
 │   ├── data-extraction.test.ts
 │   └── simulation.test.ts
-├── tools/              # 工具相关单元测试（Mock API）
-│   ├── web-search.test.ts
+├── tools/              # 工具相关测试
+│   ├── web-search.test.ts         # 单元测试（Mock fetch）
 │   └── bazi-calculator.test.ts
-├── storage/            # 存储层单元测试
+├── storage/            # 存储层测试
 │   └── service.test.ts
-├── platform/           # 平台适配器单元测试
+├── platform/           # 平台适配器测试
 │   ├── feishu-adapter.test.ts
 │   └── http-adapter.test.ts
 ├── integration/        # 集成测试（真实调用）
-│   ├── web-search-real.test.ts
+│   ├── runner.integration.test.ts # 真实 SDK
+│   ├── web-search-real.test.ts    # 真实 DuckDuckGo
 │   ├── e2e.test.ts
 │   └── workflow.test.ts
+├── e2e/                # E2E 测试（真实 LLM）
+│   └── agent-test.ts
 └── fixtures/           # 测试数据
 ```
 
 ## 现有测试审查结果
 
-| 文件 | 类型 | Mock 情况 | 外部调用 | 状态 |
-|------|------|----------|---------|------|
-| `tests/tools/web-search.test.ts` | 单元测试 | ✅ Mock fetch | 无 | ✅ 正确 |
-| `tests/agent/monologue-filter.test.ts` | 单元测试 | ❌ 无需 | 无 | ✅ 正确 |
-| `tests/agent/info-extractor.test.ts` | 单元测试 | ❌ 无需 | 无 | ✅ 正确 |
-| `tests/agent/data-extraction.test.ts` | 单元测试 | ❌ 无需 | 无 | ✅ 正确 |
-| `tests/agent/simulation.test.ts` | 单元测试 | ❌ 无需 | 无 | ✅ 正确 |
-| `tests/storage/service.test.ts` | 单元测试 | 内存数据库 | 无 | ✅ 正确 |
-| `tests/platform/feishu-adapter.test.ts` | 单元测试 | ✅ Mock | 无 | ✅ 正确 |
-| `tests/integration/web-search-real.test.ts` | 集成测试 | ❌ 真实调用 | DuckDuckGo | ✅ 正确 |
-| `tests/integration/e2e.test.ts` | 集成测试 | 内存数据库 | 无 | ✅ 正确 |
-| `tests/integration/workflow.test.ts` | 集成测试 | 真实文件 | 文件系统 | ✅ 正确 |
-| `tests/integration/http-api.test.ts` | 集成测试 | 内存数据库 | 无 | ✅ 正确 |
+### 单元测试（Mock 外部依赖 ✅）
+
+| 文件 | Mock 情况 | 说明 |
+|------|----------|------|
+| `tests/agent/runner.unit.test.ts` | ✅ Mock SDK | 测试 AgentRunner 逻辑 |
+| `tests/agent/bazi-tool.unit.test.ts` | ✅ Mock SDK | 测试工具调用逻辑 |
+| `tests/agent/monologue-filter.test.ts` | ❌ 无需 | 纯字符串处理 |
+| `tests/agent/info-extractor.test.ts` | ❌ 无需 | 纯字符串处理 |
+| `tests/tools/web-search.test.ts` | ✅ Mock fetch | 测试搜索逻辑 |
+| `tests/storage/service.test.ts` | 内存数据库 | 快速隔离 |
+| `tests/platform/*.test.ts` | ✅ Mock | 测试适配器逻辑 |
+
+### 集成测试（真实调用 ✅）
+
+| 文件 | 真实调用 | 说明 |
+|------|---------|------|
+| `tests/integration/runner.integration.test.ts` | SDK + MCP | 完整调用链路 |
+| `tests/integration/web-search-real.test.ts` | DuckDuckGo | 真实 API |
+| `tests/integration/e2e.test.ts` | 内存数据库 | 端到端流程 |
+| `tests/integration/workflow.test.ts` | 文件系统 | 完整工作流 |
+
+### E2E 测试（真实 LLM ✅）
+
+| 文件 | 真实调用 | 说明 |
+|------|---------|------|
+| `tests/e2e/agent-test.ts` | LLM API | 需要 API Key |
 
 ## 最佳实践
 
@@ -212,4 +245,8 @@ npm run test:coverage
 
 ## 更新日志
 
+- **2026-02-26**: 重构测试分层
+  - 将 mock 测试重命名为 `*.unit.test.ts`
+  - 新增 `runner.integration.test.ts` 真实 SDK 测试
+  - 明确测试命名约定
 - **2026-02-26**: 初始版本，完成测试审查
