@@ -9,6 +9,82 @@ describe('MonologueFilter', () => {
     filter = new MonologueFilter();
   });
 
+  // ============================================
+  // 新功能：keepInnerMonologue 模式
+  // inner_monologue 内容保留输出（去掉标签）
+  // ============================================
+  describe('keepInnerMonologue mode', () => {
+    beforeEach(() => {
+      filter = new MonologueFilter({ keepInnerMonologue: true });
+    });
+
+    it('should keep inner_monologue content but remove tags', () => {
+      const input = '<inner_monologue>thinking...</inner_monologue>Hello';
+      expect(filter.process(input)).toBe('thinking...Hello');
+    });
+
+    it('should keep inner_monologue content without trailing content', () => {
+      const input = '<inner_monologue>thinking...</inner_monologue>';
+      expect(filter.process(input)).toBe('thinking...');
+    });
+
+    it('should handle multiline inner_monologue', () => {
+      const input = '<inner_monologue>\nline1\nline2\n</inner_monologue>after';
+      expect(filter.process(input)).toBe('\nline1\nline2\nafter');
+    });
+
+    it('should handle multiple inner_monologue tags', () => {
+      const input = '<inner_monologue>a</inner_monologue>text<inner_monologue>b</inner_monologue>';
+      expect(filter.process(input)).toBe('atextb');
+    });
+
+    it('should still filter client_info when keepInnerMonologue is true', () => {
+      const input = '<client_info>姓名：张三</client_info>好的';
+      expect(filter.process(input)).toBe('好的');
+    });
+
+    it('should still filter confirmed_fact when keepInnerMonologue is true', () => {
+      const input = '<confirmed_fact category="career">IT</confirmed_fact>是的';
+      expect(filter.process(input)).toBe('是的');
+    });
+
+    it('should still filter prediction when keepInnerMonologue is true', () => {
+      const input = '<prediction year="2025">好运</prediction>其他';
+      expect(filter.process(input)).toBe('其他');
+    });
+
+    it('should handle mixed tags with keepInnerMonologue', () => {
+      const input =
+        '<inner_monologue>思考</inner_monologue>' +
+        '你好<client_info>姓名：李四</client_info>' +
+        '<confirmed_fact category="career">程序员</confirmed_fact>' +
+        '分析<prediction year="2026">升职</prediction>完成';
+      expect(filter.process(input)).toBe('思考你好分析完成');
+    });
+
+    it('should handle streaming with keepInnerMonologue', () => {
+      const chunks = [
+        '<inner_monologue>分析',
+        '中...</inner_monologue>',
+        '<client_info>姓名：张三</client_info>',
+        '好的',
+      ];
+
+      let output = '';
+      for (const chunk of chunks) {
+        output += filter.process(chunk);
+      }
+      output += filter.flush();
+
+      expect(output).toBe('分析中...好的');
+    });
+
+    it('should handle incomplete inner_monologue on flush', () => {
+      filter.process('<inner_monologue>thinking');
+      expect(filter.flush()).toBe('thinking');
+    });
+  });
+
   describe('process', () => {
     it('should pass through normal text', () => {
       expect(filter.process('Hello')).toBe('Hello');
