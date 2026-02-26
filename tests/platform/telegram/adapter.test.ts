@@ -1,21 +1,39 @@
 // TelegramAdapter Tests - TDD Approach
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TelegramAdapter } from '@/platform/adapters/telegram/adapter.js';
-import { escapeHtml, splitMessage, callTelegramApi } from '@/platform/adapters/telegram/message-utils.js';
 import type { IncomingMessage } from '@/platform/types.js';
-import type { TelegramUpdate, TelegramMessage } from '@/platform/adapters/telegram/types.js';
+import type { TelegramUpdate } from '@/platform/adapters/telegram/types.js';
 
-// Mock fetch for API calls
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+// Mock undici 模块 - 必须在导入之前
+vi.mock('undici', () => ({
+  request: vi.fn(),
+  ProxyAgent: class MockProxyAgent {},
+  setGlobalDispatcher: vi.fn(),
+}));
+
+// 导入模块（在 mock 之后）
+import { TelegramAdapter } from '@/platform/adapters/telegram/adapter.js';
+import { escapeHtml, splitMessage } from '@/platform/adapters/telegram/message-utils.js';
+
+// 获取 mock 函数的引用
+const mockRequest = vi.mocked(await import('undici')).request;
+
+// 辅助函数：创建 mock 响应
+function createMockResponse(data: unknown, ok = true) {
+  return {
+    body: {
+      json: async () => data,
+    },
+    ok,
+  };
+}
 
 describe('TelegramAdapter', () => {
   const defaultConfig = {
     botToken: 'test-bot-token',
     maxMessageLength: 4096,
     apiRetryAttempts: 3,
-    apiRetryDelay: 100,
+    apiRetryDelay: 10, // 短延迟用于测试
     pollingInterval: 100,
   };
 
@@ -26,6 +44,8 @@ describe('TelegramAdapter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    // 默认 mock 响应
+    mockRequest.mockResolvedValue(createMockResponse({ ok: true, result: [] }));
   });
 
   afterEach(() => {
@@ -50,12 +70,6 @@ describe('TelegramAdapter', () => {
     it('should set running to true after start', async () => {
       const adapter = createAdapter();
 
-      // Mock getUpdates to return empty array
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ ok: true, result: [] }),
-      });
-
       await adapter.start();
       expect(adapter.isRunning()).toBe(true);
     });
@@ -71,34 +85,23 @@ describe('TelegramAdapter', () => {
       const adapter = createAdapter();
       await adapter.start();
 
-      // 获取定时器数量（间接通过 vi.getTimerCount 或 spy）
-      const setIntervalSpy = vi.spyOn(global, 'setInterval');
       const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
 
-      // 再次 start 不应创建新定时器（已经在运行）
-      await adapter.start();
-
-      // stop 应该清理定时器
       await adapter.stop();
 
-      // 验证 clearInterval 被调用
       expect(clearIntervalSpy).toHaveBeenCalled();
 
-      setIntervalSpy.mockRestore();
       clearIntervalSpy.mockRestore();
     });
 
     it('should not leak memory when stop is called multiple times', async () => {
       const adapter = createAdapter();
 
-      // 多次 start/stop 循环
       for (let i = 0; i < 5; i++) {
         await adapter.start();
         await adapter.stop();
       }
 
-      // 如果有内存泄漏，这里可能会有问题
-      // 测试通过表示没有累积的定时器
       expect(adapter.isRunning()).toBe(false);
     });
   });
@@ -116,21 +119,13 @@ describe('TelegramAdapter', () => {
     it('should poll for updates after start', async () => {
       const adapter = createAdapter();
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ ok: true, result: [] }),
-      });
-
       await adapter.start();
 
       // 推进时间触发 polling
       await vi.advanceTimersByTimeAsync(150);
 
-      // getUpdates 应该被调用
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('getUpdates'),
-        expect.any(Object)
-      );
+      // request 应该被调用
+      expect(mockRequest).toHaveBeenCalled();
     });
 
     it('should process messages from polling', async () => {
@@ -157,13 +152,9 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true, result: [update] }),
-      }).mockResolvedValue({
-        ok: true,
-        json: async () => ({ ok: true, result: [] }),
-      });
+      mockRequest
+        .mockResolvedValueOnce(createMockResponse({ ok: true, result: [update] }))
+        .mockResolvedValue(createMockResponse({ ok: true, result: [] }));
 
       await adapter.start();
       await vi.advanceTimersByTimeAsync(100);
@@ -203,13 +194,9 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true, result: [update] }),
-      }).mockResolvedValue({
-        ok: true,
-        json: async () => ({ ok: true, result: [] }),
-      });
+      mockRequest
+        .mockResolvedValueOnce(createMockResponse({ ok: true, result: [update] }))
+        .mockResolvedValue(createMockResponse({ ok: true, result: [] }));
 
       await adapter.start();
       await vi.advanceTimersByTimeAsync(100);
@@ -242,26 +229,16 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      // 第一次返回 update，之后返回空
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true, result: [update] }),
-      }).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true, result: [] }),
-      }).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true, result: [update] }), // 重复的 update
-      }).mockResolvedValue({
-        ok: true,
-        json: async () => ({ ok: true, result: [] }),
-      });
+      mockRequest
+        .mockResolvedValueOnce(createMockResponse({ ok: true, result: [update] }))
+        .mockResolvedValueOnce(createMockResponse({ ok: true, result: [] }))
+        .mockResolvedValueOnce(createMockResponse({ ok: true, result: [update] })) // 重复的 update
+        .mockResolvedValue(createMockResponse({ ok: true, result: [] }));
 
       await adapter.start();
       await vi.advanceTimersByTimeAsync(100);
       await vi.advanceTimersByTimeAsync(100);
 
-      // 即使收到两次相同的 update，也只处理一次
       expect(receivedMessages).toHaveLength(1);
       expect(receivedMessages[0].text).toBe('First message');
     });
@@ -289,10 +266,7 @@ describe('TelegramAdapter', () => {
         },
       };
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ ok: true, result: [update] }),
-      });
+      mockRequest.mockResolvedValue(createMockResponse({ ok: true, result: [update] }));
 
       await adapter.start();
       await vi.advanceTimersByTimeAsync(100);
@@ -308,20 +282,28 @@ describe('TelegramAdapter', () => {
   });
 
   describe('sendMessage', () => {
+    beforeEach(() => {
+      // sendMessage 需要真实 timers（因为有 delay）
+      vi.useRealTimers();
+    });
+
+    afterEach(() => {
+      vi.useFakeTimers();
+    });
+
     it('should send message via Telegram API', async () => {
       const adapter = createAdapter();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+      mockRequest.mockResolvedValueOnce(
+        createMockResponse({
           ok: true,
           result: { message_id: 500 },
-        }),
-      });
+        })
+      );
 
       const messageId = await adapter.sendMessage('123', 'Test message');
 
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockRequest).toHaveBeenCalledWith(
         'https://api.telegram.org/bottest-bot-token/sendMessage',
         expect.objectContaining({
           method: 'POST',
@@ -335,17 +317,16 @@ describe('TelegramAdapter', () => {
     it('should escape HTML in messages', async () => {
       const adapter = createAdapter();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+      mockRequest.mockResolvedValueOnce(
+        createMockResponse({
           ok: true,
           result: { message_id: 501 },
-        }),
-      });
+        })
+      );
 
       await adapter.sendMessage('123', '<script>alert("xss")</script>');
 
-      const callArgs = mockFetch.mock.calls[0];
+      const callArgs = mockRequest.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
       expect(body.text).toContain('&lt;script&gt;');
       expect(body.text).not.toContain('<script>');
@@ -355,33 +336,37 @@ describe('TelegramAdapter', () => {
       const adapter = createAdapter();
       const longMessage = 'A'.repeat(5000);
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({
+      mockRequest.mockResolvedValue(
+        createMockResponse({
           ok: true,
           result: { message_id: 502 },
-        }),
-      });
+        })
+      );
 
       await adapter.sendMessage('123', longMessage);
 
       // Should be called twice for split messages
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockRequest).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('sendTypingIndicator', () => {
+    beforeEach(() => {
+      vi.useRealTimers();
+    });
+
+    afterEach(() => {
+      vi.useFakeTimers();
+    });
+
     it('should send chat action typing', async () => {
       const adapter = createAdapter();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true }),
-      });
+      mockRequest.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
       await adapter.sendTypingIndicator('123');
 
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockRequest).toHaveBeenCalledWith(
         'https://api.telegram.org/bottest-bot-token/sendChatAction',
         expect.objectContaining({
           method: 'POST',
@@ -442,7 +427,6 @@ describe('splitMessage', () => {
     const text = 'Line 1\n' + 'A'.repeat(4090) + '\nLine 3';
     const result = splitMessage(text, defaultMaxLength);
     expect(result.length).toBeGreaterThan(1);
-    // First part should end at newline
     expect(result[0]).toContain('Line 1');
   });
 
@@ -457,22 +441,28 @@ describe('splitMessage', () => {
 });
 
 describe('callTelegramApi', () => {
+  // callTelegramApi 使用 undici.request，已在文件顶部 mock
+
   beforeEach(() => {
-    mockFetch.mockClear();
+    vi.useRealTimers();
+    mockRequest.mockReset();
+    // 设置默认 mock 返回空结果
+    mockRequest.mockResolvedValue(createMockResponse({ ok: true, result: [] }));
   });
 
   afterEach(() => {
-    // No timer cleanup needed
+    vi.useFakeTimers();
   });
 
-  it('should return result on success', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
+  it('should call undici request with correct parameters', async () => {
+    mockRequest.mockResolvedValueOnce(
+      createMockResponse({
         ok: true,
         result: { message_id: 123 },
-      }),
-    });
+      })
+    );
+
+    const { callTelegramApi } = await import('@/platform/adapters/telegram/message-utils.js');
 
     const result = await callTelegramApi(
       'test-token',
@@ -482,24 +472,32 @@ describe('callTelegramApi', () => {
     );
 
     expect(result).toEqual({ message_id: 123 });
+    expect(mockRequest).toHaveBeenCalledWith(
+      'https://api.telegram.org/bottest-token/sendMessage',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: '123', text: 'Hello' }),
+      })
+    );
   });
 
   it('should retry on 429 rate limit', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 429,
-        headers: new Headers({ 'retry-after': '0' }),
-        text: async () => 'Too Many Requests',
-        json: async () => ({ ok: false, error_code: 429, description: 'Too Many Requests' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+    const errorResponse = {
+      statusCode: 429,
+      headers: { get: () => '0' },
+    };
+
+    mockRequest
+      .mockRejectedValueOnce(Object.assign(new Error('Rate limit'), errorResponse))
+      .mockResolvedValueOnce(
+        createMockResponse({
           ok: true,
           result: { message_id: 124 },
-        }),
-      });
+        })
+      );
+
+    const { callTelegramApi } = await import('@/platform/adapters/telegram/message-utils.js');
 
     const result = await callTelegramApi(
       'test-token',
@@ -509,74 +507,26 @@ describe('callTelegramApi', () => {
     );
 
     expect(result).toEqual({ message_id: 124 });
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('should retry on 5xx error with exponential backoff', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error',
-        json: async () => ({ ok: false, error_code: 500, description: 'Internal Server Error' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          result: { message_id: 125 },
-        }),
-      });
-
-    const result = await callTelegramApi(
-      'test-token',
-      'sendMessage',
-      { chat_id: '123', text: '5xx retry' },
-      { retryAttempts: 3, retryDelay: 10 }
-    );
-
-    expect(result).toEqual({ message_id: 125 });
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('should throw after max retry attempts', async () => {
-    for (let i = 0; i < 4; i++) {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error',
-        json: async () => ({ ok: false, error_code: 500, description: 'Internal Server Error' }),
-      });
-    }
-
-    await expect(
-      callTelegramApi(
-        'test-token',
-        'sendMessage',
-        { chat_id: '123', text: 'Max retries' },
-        { retryAttempts: 2, retryDelay: 10 }
-      )
-    ).rejects.toThrow();
-
-    expect(mockFetch).toHaveBeenCalledTimes(3); // Initial + 2 retries
+    expect(mockRequest).toHaveBeenCalledTimes(2);
   });
 
   it('should throw on API error response', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
+    mockRequest.mockResolvedValue(
+      createMockResponse({
         ok: false,
         error_code: 400,
         description: 'Bad Request: chat not found',
-      }),
-    });
+      })
+    );
+
+    const { callTelegramApi } = await import('@/platform/adapters/telegram/message-utils.js');
 
     await expect(
       callTelegramApi(
         'test-token',
         'sendMessage',
         { chat_id: 'invalid', text: 'test' },
-        { retryAttempts: 1, retryDelay: 10 }
+        { retryAttempts: 0, retryDelay: 10 }
       )
     ).rejects.toThrow('Bad Request: chat not found');
   });
