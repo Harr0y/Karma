@@ -221,10 +221,27 @@ export class AgentRunner {
             yield { type: 'text', content: remaining, raw: msg };
           }
 
-          // 5. 提取并保存结构化信息
+          // 5. 审计日志：记录原始响应（用于排查和验证）
+          this.logger.audit({
+            timestamp: new Date().toISOString(),
+            eventType: 'agent.response',
+            platform: 'cli',
+            chatId: session.id,
+            sessionId: session.id,
+            clientId: session.clientId,
+            action: 'agent_response_raw',
+            details: {
+              rawContentLength: rawContent.length,
+              rawContent, // 完整原始响应，包含所有标签
+              filteredContentLength: assistantContent.length,
+            },
+            result: 'success',
+          });
+
+          // 6. 提取并保存结构化信息
           await this.extractAndSaveInfo(rawContent, session);
 
-          // 6. 保存助手消息
+          // 7. 保存助手消息
           if (assistantContent) {
             await storage.addMessage(session.id, 'assistant', assistantContent);
             this.logger.debug('助手消息已保存', {

@@ -4,6 +4,7 @@
 import * as http from 'http';
 import { existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
+import { homedir } from 'os';
 import { StorageService } from '../storage/index.js';
 import { loadSkills } from '../skills/index.js';
 import { SessionManager } from '../session/index.js';
@@ -48,11 +49,14 @@ export class KarmaServer {
   private typingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(serverConfig?: ServerConfig) {
-    // 初始化 Logger
+    // 初始化 Logger（包含审计日志）
     const logger = createLogger({
       program: {
         level: 'info',
         outputs: [{ type: 'console', colorize: true }],
+      },
+      audit: {
+        outputs: [{ type: 'file', path: join(homedir(), '.karma', 'logs', 'audit.log') }],
       },
     });
     setLogger(logger);

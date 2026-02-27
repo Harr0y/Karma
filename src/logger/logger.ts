@@ -1,6 +1,7 @@
 // Logger Implementation - 基于 Pino 的日志实现
 
 import pino, { type Logger as PinoLogger, type LoggerOptions as PinoOptions } from 'pino';
+import { createWriteStream } from 'fs';
 import type {
   Logger,
   LogContext,
@@ -48,24 +49,20 @@ export class KarmaLogger implements Logger {
       ...options.pinoOptions,
     });
 
-    // 审计日志使用单独的 Pino 实例
+    // 审计日志使用单独的 Pino 实例（同步初始化）
     if (options.auditLogFile) {
-      // 动态导入 pino/file
-      import('pino/file').then(({ destination }) => {
-        this.auditPino = pino(
-          {
-            level: 'info',
-            formatters: {
-              level: () => ({ level: 'audit' }),
-            },
-            timestamp: () => `,"timestamp":"${new Date().toISOString()}"`,
-            base: undefined,
+      const auditStream = createWriteStream(options.auditLogFile, { flags: 'a' });
+      this.auditPino = pino(
+        {
+          level: 'info',
+          formatters: {
+            level: () => ({ level: 'audit' }),
           },
-          destination(options.auditLogFile!)
-        );
-      }).catch(() => {
-        // 忽略错误
-      });
+          timestamp: () => `,"timestamp":"${new Date().toISOString()}"`,
+          base: undefined,
+        },
+        auditStream
+      );
     }
   }
 
@@ -136,6 +133,9 @@ export class KarmaLogger implements Logger {
       module: context.module ?? this.module,
       ...context,
     });
+
+    // 继承父 logger 的审计日志
+    childLogger.auditPino = this.auditPino;
 
     return childLogger;
   }
