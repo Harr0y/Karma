@@ -58,6 +58,7 @@ export interface Logger {
 export type AuditEventType =
   | 'user.message'
   | 'user.command'
+  | 'agent.response'
   | 'agent.assertion'
   | 'agent.prediction'
   | 'session.create'
