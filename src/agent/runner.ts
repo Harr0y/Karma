@@ -17,6 +17,54 @@ import { getLogger } from '@/logger/index.js';
 import type { Logger } from '@/logger/types.js';
 import { createKarmaMcpServer } from '@/tools/registry.js';
 
+/**
+ * SDK 消息类型守卫
+ * SDK 的消息类型是动态的，需要运行时检查
+ */
+
+// 工具结果消息类型
+interface ToolResultMessage {
+  type: 'user';
+  tool_use_result: unknown;
+  parent_tool_use_id?: string;
+}
+
+// 工具进度消息类型
+interface ToolProgressMessage {
+  type: 'tool_progress';
+  tool_name?: string;
+  tool_use_id?: string;
+  elapsed_time_seconds?: number;
+}
+
+// 工具使用摘要消息类型
+interface ToolUseSummaryMessage {
+  type: 'tool_use_summary';
+  summary?: string;
+  preceding_tool_use_ids?: string[];
+}
+
+/**
+ * 检查是否为工具结果消息
+ */
+function isToolResultMessage(msg: SDKMessage): msg is SDKMessage & ToolResultMessage {
+  return msg.type === 'user' && 'tool_use_result' in msg && msg.tool_use_result !== undefined;
+}
+
+/**
+ * 检查是否为工具进度消息
+ */
+function isToolProgressMessage(msg: SDKMessage): msg is SDKMessage & ToolProgressMessage {
+  return msg.type === 'tool_progress';
+}
+
+/**
+ * 检查是否为工具使用摘要消息
+ */
+function isToolUseSummaryMessage(msg: SDKMessage): msg is SDKMessage & ToolUseSummaryMessage {
+  return msg.type === 'tool_use_summary';
+}
+
 export interface AgentRunnerConfig {
   storage: StorageService;
   sessionManager: SessionManager;
@@ -184,7 +232,7 @@ export class AgentRunner {
         }
 
         // 处理工具结果（SDK 通过 user 消息返回工具结果）
-        if (msg.type === 'user' && 'tool_use_result' in msg && msg.tool_use_result) {
+        if (isToolResultMessage(msg)) {
           // 程序日志
           this.logger.info('工具结果', {
             operation: 'tool_result',
@@ -214,26 +262,26 @@ export class AgentRunner {
         }
 
         // 处理工具进度消息
-        if (msg.type === 'tool_progress') {
+        if (isToolProgressMessage(msg)) {
           this.logger.debug('工具执行中', {
             operation: 'tool_progress',
             sessionId: session.id,
             metadata: {
-              toolName: (msg as any).tool_name,
-              toolUseId: (msg as any).tool_use_id,
-              elapsedSeconds: (msg as any).elapsed_time_seconds,
+              toolName: msg.tool_name,
+              toolUseId: msg.tool_use_id,
+              elapsedSeconds: msg.elapsed_time_seconds,
             },
           });
         }
 
         // 处理工具使用摘要
-        if (msg.type === 'tool_use_summary') {
+        if (isToolUseSummaryMessage(msg)) {
           this.logger.info('工具使用摘要', {
             operation: 'tool_use_summary',
             sessionId: session.id,
             metadata: {
-              summary: (msg as any).summary,
-              precedingToolUseIds: (msg as any).preceding_tool_use_ids,
+              summary: msg.summary,
+              precedingToolUseIds: msg.preceding_tool_use_ids,
             },
           });
         }

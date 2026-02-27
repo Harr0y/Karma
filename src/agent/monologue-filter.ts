@@ -27,7 +27,7 @@ const FULL_FILTER_TAGS = [
 const COMMON_TAG_ERRORS: Record<string, string[]> = {
   inner_monologue: ['connections', 'monologue', 'inner_monologuee', 'innermonologue'],
   client_info: ['clientinfo', 'client_inf'],
-  confirmed_fact: ['confirmedfact', 'confirm_fact'],
+  confirmed_fact: ['confirmedfact', 'confirm_fact', 'fact_check'],
   prediction: ['predicton', 'predicition'],
 };
 
@@ -71,7 +71,6 @@ export class MonologueFilter {
   private insideTag: string | null = null;
   private hasOutput = false;
   private keepInnerMonologue: boolean;
-  private tagContentLength = 0; // 追踪当前标签内容长度
   private tagErrorLogged = false; // 避免重复日志
 
   constructor(options: MonologueFilterOptions = {}) {
@@ -109,16 +108,14 @@ export class MonologueFilter {
           const actualEndTag = this.findActualEndTag(endIdx);
           this.buffer = this.buffer.slice(endIdx + actualEndTag.length);
           this.insideTag = null;
-          this.tagContentLength = 0;
         } else {
           // 检查是否超过最大长度（可能是解析错误）
-          this.tagContentLength += this.buffer.length;
-          if (this.tagContentLength > MAX_TAG_CONTENT_LENGTH && !this.tagErrorLogged) {
+          // 注意：直接用 buffer.length，不要累加，因为 buffer 包含了所有未处理的内容
+          if (this.buffer.length > MAX_TAG_CONTENT_LENGTH && !this.tagErrorLogged) {
             console.warn(`[MonologueFilter] 标签内容超过 ${MAX_TAG_CONTENT_LENGTH} 字符，可能解析错误`);
             this.tagErrorLogged = true;
             // 强制退出标签模式，输出后续内容
             this.insideTag = null;
-            this.tagContentLength = 0;
             // 不丢弃 buffer，继续处理
             continue;
           }
@@ -303,7 +300,6 @@ export class MonologueFilter {
     this.buffer = '';
     this.insideTag = null;
     this.hasOutput = false;
-    this.tagContentLength = 0;
     this.tagErrorLogged = false;
   }
 }
