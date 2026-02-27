@@ -101,7 +101,9 @@ export class AgentRunner {
     });
 
     // 2. 构建环境变量
-    const env: Record<string, string> = { ...process.env } as Record<string, string>;
+    // 排除 CLAUDECODE 以允许在 Claude Code 会话中嵌套运行 SDK
+    const { CLAUDECODE, ...restEnv } = process.env as Record<string, string | undefined>;
+    const env: Record<string, string> = restEnv as Record<string, string>;
     if (authToken) {
       env.ANTHROPIC_AUTH_TOKEN = authToken;
     }

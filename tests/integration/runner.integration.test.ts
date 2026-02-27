@@ -144,7 +144,7 @@ describe.skipIf(process.env.SKIP_INTEGRATION_TESTS === 'true')(
         console.log('Text response:', textContent);
 
         // 至少应该有回复
-        expect(toolUse || textContent.length > 0).toBe(true);
+        expect(toolUse || textContent.length > 0).toBeTruthy();
       });
     });
 
