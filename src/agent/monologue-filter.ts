@@ -1,5 +1,7 @@
 // Monologue Filter - 过滤内部标签
 
+import { getLogger } from '@/logger/index.js';
+
 /**
  * 需要从用户输出中过滤的标签列表
  * 这些标签用于系统提取信息，用户不应看到
@@ -112,7 +114,9 @@ export class MonologueFilter {
           // 检查是否超过最大长度（可能是解析错误）
           // 注意：直接用 buffer.length，不要累加，因为 buffer 包含了所有未处理的内容
           if (this.buffer.length > MAX_TAG_CONTENT_LENGTH && !this.tagErrorLogged) {
-            console.warn(`[MonologueFilter] 标签内容超过 ${MAX_TAG_CONTENT_LENGTH} 字符，可能解析错误`);
+            getLogger().warn(`标签内容超过 ${MAX_TAG_CONTENT_LENGTH} 字符，可能解析错误`, {
+              module: 'agent',
+            });
             this.tagErrorLogged = true;
             // 强制退出标签模式，输出后续内容
             this.insideTag = null;
@@ -211,7 +215,9 @@ export class MonologueFilter {
       const errorEndTag = `</${variant}>`;
       const idx = this.buffer.indexOf(errorEndTag);
       if (idx !== -1) {
-        console.warn(`[MonologueFilter] 检测到错误标签: </${variant}> 应为 </${expectedTag}>`);
+        getLogger().warn(`检测到错误标签: </${variant}> 应为 </${expectedTag}>`, {
+          module: 'agent',
+        });
         return idx;
       }
     }
