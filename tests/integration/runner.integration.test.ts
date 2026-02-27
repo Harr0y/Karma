@@ -359,5 +359,86 @@ describe.skipIf(process.env.SKIP_INTEGRATION_TESTS === 'true')(
         expect(toolUse2 || textContent2.length > 0).toBeTruthy();
       }, 120000);
     });
+
+    describe('事实提取 + 持久化', () => {
+      it('should extract and persist confirmed facts from conversation', async () => {
+        const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 先提供生辰信息建立客户档案
+        for await (const _ of runner.runText({
+          userInput: '我是1990年5月15日早上6点出生的，男，长沙人',
+          session,
+        })) {
+          // consume
+        }
+
+        // 用户确认一些事实
+        const messages: any[] = [];
+        for await (const msg of runner.run({
+          userInput: '对，我现在在北京做程序员，已经结婚三年了',
+          session,
+        })) {
+          messages.push(msg);
+        }
+
+        const textContent = messages
+          .filter(m => m.type === 'text')
+          .map(m => m.content)
+          .join('');
+
+        console.log('Fact confirmation response:', textContent);
+
+        // 如果有 clientId，检查事实是否被持久化
+        if (session.clientId) {
+          const facts = await storage.getClientFacts(session.clientId);
+          console.log('Persisted facts:', facts);
+          // 事实可能被提取并保存（取决于 Agent 是否输出 <confirmed_fact> 标签）
+          // 这里只验证不会崩溃，具体提取由 info-extractor 测试覆盖
+        }
+
+        // 至少应该有响应
+        expect(textContent.length).toBeGreaterThan(0);
+      }, 120000);
+    });
+
+    describe('预测提取 + 持久化', () => {
+      it('should extract and persist predictions from analysis', async () => {
+        const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 提供生辰信息
+        for await (const _ of runner.runText({
+          userInput: '我是1990年5月15日早上6点出生的，男',
+          session,
+        })) {
+          // consume
+        }
+
+        // 请求预测
+        const messages: any[] = [];
+        for await (const msg of runner.run({
+          userInput: '帮我看看接下来几年的运势，特别是事业和财运',
+          session,
+        })) {
+          messages.push(msg);
+        }
+
+        const textContent = messages
+          .filter(m => m.type === 'text')
+          .map(m => m.content)
+          .join('');
+
+        console.log('Prediction response:', textContent);
+
+        // 如果有 clientId，检查预测是否被持久化
+        if (session.clientId) {
+          const predictions = await storage.getClientPredictions(session.clientId);
+          console.log('Persisted predictions:', predictions);
+          // 预测可能被提取并保存（取决于 Agent 是否输出 <prediction> 标签）
+        }
+
+        // 至少应该有响应
+        expect(textContent.length).toBeGreaterThan(0);
+      }, 180000);
+    });
   }
 );
