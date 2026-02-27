@@ -183,6 +183,61 @@ export class AgentRunner {
           yield { type: 'system', content: 'Session initialized', raw: msg };
         }
 
+        // 处理工具结果（SDK 通过 user 消息返回工具结果）
+        if (msg.type === 'user' && 'tool_use_result' in msg && msg.tool_use_result) {
+          // 程序日志
+          this.logger.info('工具结果', {
+            operation: 'tool_result',
+            sessionId: session.id,
+            metadata: {
+              toolUseResult: typeof msg.tool_use_result === 'string'
+                ? msg.tool_use_result.substring(0, 500)
+                : JSON.stringify(msg.tool_use_result).substring(0, 500),
+              parentToolUseId: msg.parent_tool_use_id,
+            },
+          });
+          // 审计日志：记录完整的工具结果
+          this.logger.audit({
+            timestamp: new Date().toISOString(),
+            eventType: 'agent.response',
+            platform: 'cli',
+            chatId: session.id,
+            sessionId: session.id,
+            clientId: session.clientId,
+            action: 'tool_result',
+            details: {
+              toolUseResult: msg.tool_use_result,
+              parentToolUseId: msg.parent_tool_use_id,
+            },
+            result: 'success',
+          });
+        }
+
+        // 处理工具进度消息
+        if (msg.type === 'tool_progress') {
+          this.logger.debug('工具执行中', {
+            operation: 'tool_progress',
+            sessionId: session.id,
+            metadata: {
+              toolName: (msg as any).tool_name,
+              toolUseId: (msg as any).tool_use_id,
+              elapsedSeconds: (msg as any).elapsed_time_seconds,
+            },
+          });
+        }
+
+        // 处理工具使用摘要
+        if (msg.type === 'tool_use_summary') {
+          this.logger.info('工具使用摘要', {
+            operation: 'tool_use_summary',
+            sessionId: session.id,
+            metadata: {
+              summary: (msg as any).summary,
+              precedingToolUseIds: (msg as any).preceding_tool_use_ids,
+            },
+          });
+        }
+
         if (msg.type === 'assistant' && 'message' in msg) {
           const content = msg.message?.content;
           if (Array.isArray(content)) {
@@ -196,7 +251,7 @@ export class AgentRunner {
                   yield { type: 'text', content: filtered, raw: msg };
                 }
               } else if (block.type === 'tool_use') {
-                // 记录工具调用
+                // 记录工具调用（程序日志）
                 this.logger.info('工具调用', {
                   operation: 'tool_use',
                   sessionId: session.id,
@@ -205,6 +260,22 @@ export class AgentRunner {
                     toolId: block.id,
                     input: block.input,
                   },
+                });
+                // 审计日志：记录工具调用详情
+                this.logger.audit({
+                  timestamp: new Date().toISOString(),
+                  eventType: 'agent.response',
+                  platform: 'cli',
+                  chatId: session.id,
+                  sessionId: session.id,
+                  clientId: session.clientId,
+                  action: 'tool_call',
+                  details: {
+                    toolName: block.name,
+                    toolId: block.id,
+                    input: block.input,
+                  },
+                  result: 'success',
                 });
                 yield { type: 'tool_use', content: block.name || 'tool', raw: msg };
               }

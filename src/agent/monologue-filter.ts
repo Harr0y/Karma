@@ -21,6 +21,23 @@ const FULL_FILTER_TAGS = [
 ] as const;
 
 /**
+ * 常见的错误结束标签变体
+ * 用于容错处理
+ */
+const COMMON_TAG_ERRORS: Record<string, string[]> = {
+  inner_monologue: ['connections', 'monologue', 'inner_monologuee', 'innermonologue'],
+  client_info: ['clientinfo', 'client_inf'],
+  confirmed_fact: ['confirmedfact', 'confirm_fact'],
+  prediction: ['predicton', 'predicition'],
+};
+
+/**
+ * 标签内容最大长度（字符）
+ * 超过此长度可能表示标签解析错误
+ */
+const MAX_TAG_CONTENT_LENGTH = 10000;
+
+/**
  * 匹配开始标签的正则表达式
  * 支持 <tag> 和 <tag attr="value"> 两种格式
  */
@@ -54,6 +71,8 @@ export class MonologueFilter {
   private insideTag: string | null = null;
   private hasOutput = false;
   private keepInnerMonologue: boolean;
+  private tagContentLength = 0; // 追踪当前标签内容长度
+  private tagErrorLogged = false; // 避免重复日志
 
   constructor(options: MonologueFilterOptions = {}) {
     this.keepInnerMonologue = options.keepInnerMonologue ?? false;
@@ -72,7 +91,12 @@ export class MonologueFilter {
       if (this.insideTag) {
         // 在标签内部，查找结束标签
         const endTag = `</${this.insideTag}>`;
-        const endIdx = this.buffer.indexOf(endTag);
+        let endIdx = this.buffer.indexOf(endTag);
+
+        // 如果没找到精确匹配，尝试错误变体
+        if (endIdx === -1) {
+          endIdx = this.findErrorTagEnd(this.insideTag);
+        }
 
         if (endIdx !== -1) {
           // 如果是 inner_monologue 且 keepInnerMonologue 为 true，输出内容
@@ -81,9 +105,24 @@ export class MonologueFilter {
             output.push(content);
           }
           // 其他情况：完全过滤（不输出内容）
-          this.buffer = this.buffer.slice(endIdx + endTag.length);
+          // 找到实际结束标签的长度
+          const actualEndTag = this.findActualEndTag(endIdx);
+          this.buffer = this.buffer.slice(endIdx + actualEndTag.length);
           this.insideTag = null;
+          this.tagContentLength = 0;
         } else {
+          // 检查是否超过最大长度（可能是解析错误）
+          this.tagContentLength += this.buffer.length;
+          if (this.tagContentLength > MAX_TAG_CONTENT_LENGTH && !this.tagErrorLogged) {
+            console.warn(`[MonologueFilter] 标签内容超过 ${MAX_TAG_CONTENT_LENGTH} 字符，可能解析错误`);
+            this.tagErrorLogged = true;
+            // 强制退出标签模式，输出后续内容
+            this.insideTag = null;
+            this.tagContentLength = 0;
+            // 不丢弃 buffer，继续处理
+            continue;
+          }
+
           // 结束标签可能还没到
           // 如果是 inner_monologue 且 keepInnerMonologue 为 true，可以输出安全部分
           if (this.insideTag === 'inner_monologue' && this.keepInnerMonologue) {
@@ -165,6 +204,42 @@ export class MonologueFilter {
   }
 
   /**
+   * 查找错误标签变体的结束位置
+   * @param expectedTag 期望的标签名
+   * @returns 错误标签的结束位置，如果没找到返回 -1
+   */
+  private findErrorTagEnd(expectedTag: string): number {
+    const errorVariants = COMMON_TAG_ERRORS[expectedTag] || [];
+    for (const variant of errorVariants) {
+      const errorEndTag = `</${variant}>`;
+      const idx = this.buffer.indexOf(errorEndTag);
+      if (idx !== -1) {
+        console.warn(`[MonologueFilter] 检测到错误标签: </${variant}> 应为 </${expectedTag}>`);
+        return idx;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * 找到实际的结束标签
+   * @param startIdx 开始位置
+   * @returns 实际结束标签的字符串
+   */
+  private findActualEndTag(startIdx: number): string {
+    // 查找从 startIdx 开始的 </ 标签
+    const tagStart = this.buffer.indexOf('</', startIdx);
+    if (tagStart === startIdx) {
+      const tagEnd = this.buffer.indexOf('>', startIdx);
+      if (tagEnd !== -1) {
+        return this.buffer.slice(startIdx, tagEnd + 1);
+      }
+    }
+    // 默认返回标准长度
+    return `</${this.insideTag}>`;
+  }
+
+  /**
    * 查找 buffer 中最早的开始标签
    * 返回标签名、位置和完整匹配
    */
@@ -228,5 +303,7 @@ export class MonologueFilter {
     this.buffer = '';
     this.insideTag = null;
     this.hasOutput = false;
+    this.tagContentLength = 0;
+    this.tagErrorLogged = false;
   }
 }
