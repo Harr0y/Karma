@@ -440,5 +440,192 @@ describe.skipIf(process.env.SKIP_INTEGRATION_TESTS === 'true')(
         expect(textContent.length).toBeGreaterThan(0);
       }, 180000);
     });
+
+    describe('会话恢复（跨 Runner 实例）', () => {
+      it('should resume conversation across runner instances using sdkSessionId', async () => {
+        // 第一个 Runner 实例
+        const session1 = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 第一轮对话
+        const texts1: string[] = [];
+        for await (const text of runner.runText({
+          userInput: '我叫王五，记住了',
+          session: session1,
+        })) {
+          texts1.push(text);
+        }
+
+        console.log('First runner response:', texts1.join(''));
+        expect(session1.sdkSessionId).toBeDefined();
+
+        // 保存 sdkSessionId
+        const savedSdkSessionId = session1.sdkSessionId;
+
+        // 模拟新进程：创建新的 Runner 实例
+        const newTempDir = join(tmpdir(), `karma-runner-resume-${Date.now()}`);
+        mkdirSync(newTempDir, { recursive: true });
+
+        const newStorage = new StorageService(join(newTempDir, 'resumed.db'));
+        const newSessionManager = new SessionManager(newStorage);
+
+        // 模拟从持久化恢复 session
+        const restoredSession = await newSessionManager.getOrCreateSession({
+          platform: 'cli',
+          externalChatId: session1.externalChatId,
+        });
+        // 手动设置 sdkSessionId（模拟从数据库恢复）
+        await newSessionManager.updateSdkSessionId(restoredSession.id, savedSdkSessionId!);
+        restoredSession.sdkSessionId = savedSdkSessionId;
+
+        // 创建新的 Runner
+        const newSoulPath = join(newTempDir, 'SOUL.md');
+        writeFileSync(newSoulPath, '# Test Fortune Teller\n\nYou are a test fortune teller.');
+
+        const newPersonaService = new PersonaService({
+          soulPath: newSoulPath,
+          storage: newStorage,
+        });
+
+        const { skills } = await loadSkills({ projectDir: process.cwd() + '/skills' });
+
+        const newRunner = new AgentRunner({
+          storage: newStorage,
+          sessionManager: newSessionManager,
+          skills,
+          personaService: newPersonaService,
+          model: process.env.ANTHROPIC_MODEL || 'glm-5',
+          baseUrl: process.env.ANTHROPIC_BASE_URL,
+          authToken: process.env.ANTHROPIC_AUTH_TOKEN,
+        });
+
+        // 第二轮对话：使用新 Runner，但恢复的 session
+        const texts2: string[] = [];
+        for await (const text of newRunner.runText({
+          userInput: '你还记得我的名字吗？',
+          session: restoredSession,
+        })) {
+          texts2.push(text);
+        }
+
+        const response2 = texts2.join('');
+        console.log('Second runner (resumed) response:', response2);
+
+        // 清理
+        newStorage.close();
+        rmSync(newTempDir, { recursive: true, force: true });
+
+        // 至少应该有响应
+        expect(response2.length).toBeGreaterThan(0);
+      }, 180000);
+    });
+
+    describe('错误处理', () => {
+      it('should handle API timeout gracefully', async () => {
+        // 创建一个极短超时的 Runner
+        const shortTimeoutDir = join(tmpdir(), `karma-timeout-test-${Date.now()}`);
+        mkdirSync(shortTimeoutDir, { recursive: true });
+
+        const shortTimeoutStorage = new StorageService(join(shortTimeoutDir, 'timeout.db'));
+        const shortTimeoutSessionManager = new SessionManager(shortTimeoutStorage);
+
+        const soulPath = join(shortTimeoutDir, 'SOUL.md');
+        writeFileSync(soulPath, '# Test Fortune Teller\n\nYou are a test fortune teller.');
+
+        const personaService = new PersonaService({
+          soulPath,
+          storage: shortTimeoutStorage,
+        });
+
+        const { skills } = await loadSkills({ projectDir: process.cwd() + '/skills' });
+
+        const shortTimeoutRunner = new AgentRunner({
+          storage: shortTimeoutStorage,
+          sessionManager: shortTimeoutSessionManager,
+          skills,
+          personaService,
+          model: process.env.ANTHROPIC_MODEL || 'glm-5',
+          baseUrl: process.env.ANTHROPIC_BASE_URL,
+          authToken: process.env.ANTHROPIC_AUTH_TOKEN,
+          timeout: 1, // 1ms - 必然超时
+        });
+
+        const session = await shortTimeoutSessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 应该抛出超时错误，而不是崩溃
+        let errorThrown: Error | null = null;
+        try {
+          for await (const _ of shortTimeoutRunner.runText({
+            userInput: '你好',
+            session,
+          })) {
+            // consume
+          }
+        } catch (err) {
+          errorThrown = err as Error;
+        }
+
+        // 清理
+        shortTimeoutStorage.close();
+        rmSync(shortTimeoutDir, { recursive: true, force: true });
+
+        // 应该抛出错误（超时）
+        expect(errorThrown).not.toBeNull();
+        expect(errorThrown?.name).toBe('TimeoutError');
+        console.log('Timeout error caught:', errorThrown?.message);
+      }, 30000);
+
+      it('should handle invalid API token gracefully', async () => {
+        // 创建使用无效 API token 的 Runner
+        const invalidTokenDir = join(tmpdir(), `karma-invalid-token-test-${Date.now()}`);
+        mkdirSync(invalidTokenDir, { recursive: true });
+
+        const invalidTokenStorage = new StorageService(join(invalidTokenDir, 'invalid-token.db'));
+        const invalidTokenSessionManager = new SessionManager(invalidTokenStorage);
+
+        const soulPath = join(invalidTokenDir, 'SOUL.md');
+        writeFileSync(soulPath, '# Test Fortune Teller\n\nYou are a test fortune teller.');
+
+        const personaService = new PersonaService({
+          soulPath,
+          storage: invalidTokenStorage,
+        });
+
+        const { skills } = await loadSkills({ projectDir: process.cwd() + '/skills' });
+
+        const invalidTokenRunner = new AgentRunner({
+          storage: invalidTokenStorage,
+          sessionManager: invalidTokenSessionManager,
+          skills,
+          personaService,
+          model: 'glm-5',
+          baseUrl: process.env.ANTHROPIC_BASE_URL,
+          authToken: 'invalid-token-12345', // 无效 token
+          timeout: 5000, // 5秒超时，确保测试不会无限等待
+        });
+
+        const session = await invalidTokenSessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 应该抛出错误，而不是崩溃
+        let errorThrown: Error | null = null;
+        try {
+          for await (const _ of invalidTokenRunner.runText({
+            userInput: '你好',
+            session,
+          })) {
+            // consume
+          }
+        } catch (err) {
+          errorThrown = err as Error;
+        }
+
+        // 清理
+        invalidTokenStorage.close();
+        rmSync(invalidTokenDir, { recursive: true, force: true });
+
+        // 应该抛出错误（认证失败或超时）
+        expect(errorThrown).not.toBeNull();
+        console.log('Error caught:', errorThrown?.name, errorThrown?.message);
+      }, 60000);
+    });
   }
 );
