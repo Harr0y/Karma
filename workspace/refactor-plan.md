@@ -127,7 +127,7 @@ export const PROMPTS = {
 } as const;
 
 export const DEFAULTS = {
-  HTTP_PORT: 3000,
+  HTTP_PORT: 3080,
   HTTP_HOST: '0.0.0.0',
   MAX_MESSAGE_LENGTH: 4096,
 } as const;

@@ -4,7 +4,7 @@
 # 服务器配置
 server:
   host: ${KARMA_SERVER_HOST:0.0.0.0}
-  port: ${KARMA_SERVER_PORT:3000}
+  port: ${KARMA_SERVER_PORT:3080}
 
 # AI 配置
 ai:

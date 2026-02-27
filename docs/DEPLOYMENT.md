@@ -321,7 +321,7 @@ RUN npm install -g pnpm && pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 
-EXPOSE 3000
+EXPOSE 3080
 
 CMD ["node", "dist/index.js", "server"]
 ```
@@ -334,7 +334,7 @@ docker build -t karma:latest .
 # 运行容器
 docker run -d \
   --name karma \
-  -p 3000:3000 \
+  -p 3080:3080 \
   -v ~/.karma:/root/.karma \
   -e ANTHROPIC_AUTH_TOKEN="your-token" \
   karma:latest
@@ -542,7 +542,7 @@ export $(cat .env | xargs)
 sudo ufw allow 22
 
 # 允许 HTTP API（如果需要）
-sudo ufw allow 3000
+sudo ufw allow 3080
 
 # 启用防火墙
 sudo ufw enable
@@ -562,7 +562,7 @@ server {
     ssl_certificate_key /path/to/key.pem;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

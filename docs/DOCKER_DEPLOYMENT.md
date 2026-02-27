@@ -30,7 +30,7 @@ cat > config.yaml << EOF
 # 服务器配置
 server:
   host: "0.0.0.0"
-  port: 3000
+  port: 3080
 
 # AI 配置
 ai:
@@ -61,7 +61,7 @@ EOF
 docker compose up -d
 
 # 3. 验证服务
-curl http://localhost:3000/health
+curl http://localhost:3080/health
 # 期望输出: {"status":"ok","service":"karma-api"}
 ```
 
@@ -93,7 +93,7 @@ curl http://localhost:3000/health
 # 服务器配置
 server:
   host: "0.0.0.0"    # 监听地址
-  port: 3000         # 监听端口
+  port: 3080         # 监听端口
 
 # AI 配置
 ai:
@@ -128,7 +128,7 @@ logging:
 | `ANTHROPIC_BASE_URL` | `ai.baseUrl` | `https://api.anthropic.com` | API 基础 URL |
 | `ANTHROPIC_MODEL` | `ai.model` | `claude-sonnet-4-5-20250929` | 使用的模型 |
 | `KARMA_SERVER_HOST` | `server.host` | `0.0.0.0` | 监听地址 |
-| `KARMA_SERVER_PORT` | `server.port` | `3000` | 监听端口 |
+| `KARMA_SERVER_PORT` | `server.port` | `3080` | 监听端口 |
 
 ### 2.4 Docker 环境变量示例
 
@@ -138,7 +138,7 @@ ANTHROPIC_AUTH_TOKEN=your_token_here
 ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic
 ANTHROPIC_MODEL=glm-5
 KARMA_SERVER_HOST=0.0.0.0
-KARMA_SERVER_PORT=3000
+KARMA_SERVER_PORT=3080
 ```
 
 ---
@@ -212,11 +212,11 @@ ENV NODE_ENV=production
 ENV HOME=/home/karma
 
 # Expose port
-EXPOSE 3000
+EXPOSE 3080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3080/health || exit 1
 
 # Switch to non-root user
 USER karma
@@ -258,7 +258,7 @@ services:
     container_name: karma-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3080:3080"
     environment:
       # GLM API 配置
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
@@ -270,7 +270,7 @@ services:
       # 持久化数据库 - 路径必须与 HOME/.karma 一致
       - karma-data:/home/karma/.karma
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -324,14 +324,14 @@ docker compose up -d
 
 **可能原因：**
 1. Colima 未运行 - 运行 `colima start`
-2. 端口被占用 - 检查 `lsof -i :3000`
+2. 端口被占用 - 检查 `lsof -i :3080`
 3. 代理干扰 - 见下方解决方案
 
 **代理干扰解决方案：**
 
 方式一：临时绕过（推荐）
 ```bash
-curl --noproxy '*' http://localhost:3000/health
+curl --noproxy '*' http://localhost:3080/health
 ```
 
 方式二：配置环境变量（永久）
@@ -407,14 +407,14 @@ docker run --rm -v karma_karma-data:/data -v $(pwd):/backup alpine tar xzf /back
 
 ```bash
 # 检查服务状态
-curl http://localhost:3000/health
+curl http://localhost:3080/health
 
 # 测试聊天 API
-curl -X POST http://localhost:3000/api/session \
+curl -X POST http://localhost:3080/api/session \
   -H "Content-Type: application/json" \
   -d '{"userId": "test"}'
 
-curl -X POST http://localhost:3000/api/chat \
+curl -X POST http://localhost:3080/api/chat \
   -H "Content-Type: application/json" \
   -d '{"sessionId": "session_xxx", "message": "你好"}'
 ```
@@ -433,7 +433,7 @@ cd "$(dirname "$0")"
 case "${1:-up}" in
   up)
     docker compose up -d
-    echo "✅ 服务已启动: http://localhost:3000"
+    echo "✅ 服务已启动: http://localhost:3080"
     echo "📋 查看日志: ./start.sh logs"
     ;;
   down)

@@ -16,7 +16,7 @@ case "${1:-up}" in
   up)
     echo "🚀 启动 Karma 服务..."
     docker compose up -d
-    echo "✅ 服务已启动: http://localhost:3000"
+    echo "✅ 服务已启动: http://localhost:3080"
     echo "📋 查看日志: ./start.sh logs"
     ;;
   down)
@@ -38,7 +38,7 @@ case "${1:-up}" in
     ;;
   test)
     echo "🧪 测试 API 连接..."
-    curl --noproxy '*' -s http://localhost:3000/health && echo "" || echo "❌ 连接失败"
+    curl --noproxy '*' -s http://localhost:3080/health && echo "" || echo "❌ 连接失败"
     ;;
   *)
     echo "用法: $0 {up|down|logs|restart|status|test}"

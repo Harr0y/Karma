@@ -253,7 +253,7 @@ skills:
 pnpm start
 
 # 服务器模式
-karma server --port 3000
+karma server --port 3080
 ```
 
 ---

@@ -60,7 +60,7 @@ export ANTHROPIC_AUTH_TOKEN="your-token-here"
 pnpm start
 
 # 服务器模式
-karma server --port 3000
+karma server --port 3080
 ```
 
 ---
@@ -176,13 +176,13 @@ API: https://api.anthropic.com
 
 ```bash
 # 启动服务器
-karma server --port 3000 --host localhost
+karma server --port 3080 --host localhost
 ```
 
 **API 端点**：
 ```bash
 # 发送消息
-POST http://localhost:3000/chat
+POST http://localhost:3080/chat
 Content-Type: application/json
 
 {

@@ -76,11 +76,11 @@ ENV NODE_ENV=production
 ENV HOME=/home/karma
 
 # Expose port
-EXPOSE 3000
+EXPOSE 3080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3080/health || exit 1
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
