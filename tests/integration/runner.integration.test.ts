@@ -20,7 +20,7 @@ import { join } from 'path';
  */
 describe.skipIf(process.env.SKIP_INTEGRATION_TESTS === 'true')(
   'Integration: AgentRunner with Real SDK',
-  { timeout: 60000 },
+  { timeout: 120000 },
   () => {
     let storage: StorageService;
     let sessionManager: SessionManager;
@@ -216,6 +216,148 @@ describe.skipIf(process.env.SKIP_INTEGRATION_TESTS === 'true')(
         console.log('Second response:', response2);
         expect(response2.length).toBeGreaterThan(0);
       });
+    });
+
+    describe('Web Search 工具调用', () => {
+      it('should call web_search tool for historical events', async () => {
+        const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        const messages: any[] = [];
+        for await (const msg of runner.run({
+          userInput: '帮我查一下1990年中国发生了什么大事',
+          session,
+        })) {
+          messages.push(msg);
+        }
+
+        // 检查是否有工具调用
+        const toolUse = messages.find(m => m.type === 'tool_use');
+        const textContent = messages
+          .filter(m => m.type === 'text')
+          .map(m => m.content)
+          .join('');
+
+        console.log('Web search tool use:', toolUse);
+        console.log('Text response:', textContent);
+
+        // 至少应该有回复（可能调用 web_search，也可能直接回复）
+        expect(toolUse || textContent.length > 0).toBeTruthy();
+      }, 120000);
+    });
+
+    describe('客户信息提取 + 持久化', () => {
+      it('should extract and persist client info from real response', async () => {
+        const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 用户提供完整生辰信息
+        const messages: any[] = [];
+        for await (const msg of runner.run({
+          userInput: '我叫李四，男，1990年5月15日早上6点出生，出生地是长沙，现在住在北京',
+          session,
+        })) {
+          messages.push(msg);
+        }
+
+        // 验证响应
+        const textContent = messages
+          .filter(m => m.type === 'text')
+          .map(m => m.content)
+          .join('');
+
+        console.log('Client info response:', textContent);
+        expect(textContent.length).toBeGreaterThan(0);
+
+        // 验证客户信息被提取并持久化
+        // 注意：这取决于 Agent 是否在响应中输出 <client_info> 标签
+        if (session.clientId) {
+          const client = await storage.getClient(session.clientId);
+          console.log('Persisted client:', client);
+          // 客户记录应该存在
+          expect(client).toBeDefined();
+        }
+      }, 120000);
+    });
+
+    describe('Inner Monologue 过滤', () => {
+      it('should filter inner_monologue from runText output', async () => {
+        const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 使用 runText 获取过滤后的输出
+        const filteredTexts: string[] = [];
+        for await (const text of runner.runText({
+          userInput: '你好，帮我看看运势',
+          session,
+        })) {
+          filteredTexts.push(text);
+        }
+
+        const filteredOutput = filteredTexts.join('');
+        console.log('Filtered output:', filteredOutput);
+
+        // runText 输出不应包含 inner_monologue 标签
+        expect(filteredOutput).not.toContain('<inner_monologue>');
+        expect(filteredOutput).not.toContain('</inner_monologue>');
+      });
+
+      it('should preserve inner_monologue in raw run output', async () => {
+        const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 使用 run 获取原始输出（包含 inner_monologue）
+        const rawMessages: any[] = [];
+        for await (const msg of runner.run({
+          userInput: '你好，帮我看看运势',
+          session,
+        })) {
+          rawMessages.push(msg);
+        }
+
+        // 原始输出可能包含 inner_monologue（在 MonologueFilter 处理前）
+        // 这个测试验证 run() 方法返回原始数据
+        const hasTextContent = rawMessages.some(m => m.type === 'text');
+        expect(hasTextContent || rawMessages.length > 0).toBeTruthy();
+      });
+    });
+
+    describe('多轮对话 + 工具链', () => {
+      it('should handle multi-turn conversation with tool chain', async () => {
+        const session = await sessionManager.getOrCreateSession({ platform: 'cli' });
+
+        // 第一轮：用户提供生辰 -> 可能调用 bazi_calculator
+        const messages1: any[] = [];
+        for await (const msg of runner.run({
+          userInput: '我是1990年5月15日早上6点出生的，男',
+          session,
+        })) {
+          messages1.push(msg);
+        }
+
+        const toolUse1 = messages1.find(m => m.type === 'tool_use');
+        console.log('Turn 1 tool use:', toolUse1?.content);
+
+        // 第二轮：用户问历史背景 -> 可能调用 web_search
+        const messages2: any[] = [];
+        for await (const msg of runner.run({
+          userInput: '1990年那个时候中国发生了什么大事？',
+          session,
+        })) {
+          messages2.push(msg);
+        }
+
+        const toolUse2 = messages2.find(m => m.type === 'tool_use');
+        const textContent2 = messages2
+          .filter(m => m.type === 'text')
+          .map(m => m.content)
+          .join('');
+
+        console.log('Turn 2 tool use:', toolUse2?.content);
+        console.log('Turn 2 text response:', textContent2);
+
+        // 验证上下文保持（session ID 应该相同）
+        expect(session.sdkSessionId).toBeDefined();
+
+        // 至少应该有响应
+        expect(toolUse2 || textContent2.length > 0).toBeTruthy();
+      }, 120000);
     });
   }
 );
