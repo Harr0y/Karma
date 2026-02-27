@@ -8,6 +8,7 @@ import { buildColdReadingEngine } from './parts/cold-reading.js';
 import { buildPlatformRules } from './parts/platform-rules.js';
 import { buildToolGuidelines } from './parts/tool-guidelines.js';
 import { buildOutputRules } from './parts/output-rules.js';
+import { buildFirstImpression } from './parts/first-impression.js';
 import { formatSkillsForPrompt } from '@/skills/formatter.js';
 
 /**
@@ -31,6 +32,9 @@ export async function buildSystemPrompt(
 
   // 2. 人设 (可从 SOUL.md 加载或外置文件)
   parts.push(await buildPersona(context.personaConfig));
+
+  // 2.5 首次接触规则 (前几轮对话的关键指导)
+  parts.push(await buildFirstImpression());
 
   // 3. 八字框架 (核心方法，现在是 async)
   if (includeBazi) {
