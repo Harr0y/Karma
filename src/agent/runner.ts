@@ -155,8 +155,10 @@ export class AgentRunner {
     }
 
     // 4. 处理流式消息
-    // keepInnerMonologue: true - 保留 inner_monologue 内容用于调试和日志
-    const filter = new MonologueFilter({ keepInnerMonologue: true });
+    // 生产环境：keepInnerMonologue: false - 完全过滤 inner_monologue
+    // 调试环境：设置环境变量 KARMA_DEBUG=true 可保留 inner_monologue 内容
+    const keepInnerMonologue = process.env.KARMA_DEBUG === 'true';
+    const filter = new MonologueFilter({ keepInnerMonologue });
     let msgCount = 0;
     let assistantContent = ''; // 收集助手响应（过滤后）
     let rawContent = ''; // 收集原始响应（用于提取信息）
