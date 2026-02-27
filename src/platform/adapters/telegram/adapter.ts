@@ -32,6 +32,12 @@ export class TelegramAdapter implements PlatformAdapter {
   private lastUpdateId = 0;
   private isPolling = false;
 
+  // 连接失败追踪（用于自动禁用和减少日志噪音）
+  private consecutiveFailures = 0;
+  private static readonly MAX_FAILURES_BEFORE_DISABLE = 5;
+  private static readonly MAX_FAILURES_BEFORE_REDUCED_LOGGING = 3;
+  private telegramDisabled = false;
+
   constructor(config: TelegramConfig) {
     this.config = {
       enabled: true,
@@ -182,6 +188,11 @@ export class TelegramAdapter implements PlatformAdapter {
    * 调用 getUpdates API 获取新消息
    */
   private async getUpdates(): Promise<TelegramUpdate[]> {
+    // 如果已被自动禁用，直接返回空数组
+    if (this.telegramDisabled) {
+      return [];
+    }
+
     try {
       const result = await callTelegramApi<TelegramUpdate[]>(
         this.config.botToken,
@@ -197,11 +208,38 @@ export class TelegramAdapter implements PlatformAdapter {
         }
       );
 
+      // 成功时重置失败计数
+      this.consecutiveFailures = 0;
       return result;
     } catch (err) {
-      this.logger.error('getUpdates API 调用失败', err instanceof Error ? err : undefined, {
-        operation: 'get_updates_error',
-      });
+      this.consecutiveFailures++;
+
+      // 检查是否应该自动禁用
+      if (this.consecutiveFailures >= TelegramAdapter.MAX_FAILURES_BEFORE_DISABLE) {
+        this.telegramDisabled = true;
+        this.logger.warn('Telegram 连接连续失败过多，已自动禁用。请检查网络/代理配置。', {
+          operation: 'telegram_auto_disabled',
+          metadata: {
+            consecutiveFailures: this.consecutiveFailures,
+            hint: '确保 HTTPS_PROXY 环境变量正确配置，或在配置中设置 telegram.enabled: false',
+          },
+        });
+        return [];
+      }
+
+      // 减少日志噪音：前几次正常记录，之后只每隔一段时间记录一次
+      const shouldLog = this.consecutiveFailures <= TelegramAdapter.MAX_FAILURES_BEFORE_REDUCED_LOGGING
+        || this.consecutiveFailures % 10 === 0;
+
+      if (shouldLog) {
+        this.logger.error('getUpdates API 调用失败', err instanceof Error ? err : undefined, {
+          operation: 'get_updates_error',
+          metadata: {
+            consecutiveFailures: this.consecutiveFailures,
+            errorType: err?.constructor?.name,
+          },
+        });
+      }
       return [];
     }
   }
