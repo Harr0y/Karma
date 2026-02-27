@@ -36,7 +36,9 @@ export class TelegramAdapter implements PlatformAdapter {
   private consecutiveFailures = 0;
   private static readonly MAX_FAILURES_BEFORE_DISABLE = 5;
   private static readonly MAX_FAILURES_BEFORE_REDUCED_LOGGING = 3;
+  private static readonly AUTO_RETRY_INTERVAL = 300000; // 5 分钟自动重试
   private telegramDisabled = false;
+  private autoRetryTimer?: ReturnType<typeof setInterval>;
 
   constructor(config: TelegramConfig) {
     this.config = {
@@ -94,6 +96,9 @@ export class TelegramAdapter implements PlatformAdapter {
       this.cleanupTimer = undefined;
     }
 
+    // 清理自动重试定时器
+    this.stopAutoRetry();
+
     this.processedUpdates.clear();
     this.logger.info('Telegram 适配器已停止', { operation: 'stop' });
   }
@@ -103,6 +108,26 @@ export class TelegramAdapter implements PlatformAdapter {
    */
   isRunning(): boolean {
     return this.running;
+  }
+
+  /**
+   * 检查是否被禁用
+   */
+  isDisabled(): boolean {
+    return this.telegramDisabled;
+  }
+
+  /**
+   * 手动启用（从禁用状态恢复）
+   */
+  enable(): void {
+    if (this.telegramDisabled) {
+      this.telegramDisabled = false;
+      this.consecutiveFailures = 0;
+      this.logger.info('Telegram 适配器已手动恢复', {
+        operation: 'telegram_manual_enable',
+      });
+    }
   }
 
   /**
@@ -188,8 +213,12 @@ export class TelegramAdapter implements PlatformAdapter {
    * 调用 getUpdates API 获取新消息
    */
   private async getUpdates(): Promise<TelegramUpdate[]> {
-    // 如果已被自动禁用，直接返回空数组
+    // 如果已被自动禁用，检查是否应该自动重试
     if (this.telegramDisabled) {
+      // 启动自动重试定时器（如果还没启动）
+      if (!this.autoRetryTimer) {
+        this.startAutoRetry();
+      }
       return [];
     }
 
@@ -217,11 +246,11 @@ export class TelegramAdapter implements PlatformAdapter {
       // 检查是否应该自动禁用
       if (this.consecutiveFailures >= TelegramAdapter.MAX_FAILURES_BEFORE_DISABLE) {
         this.telegramDisabled = true;
-        this.logger.warn('Telegram 连接连续失败过多，已自动禁用。请检查网络/代理配置。', {
+        this.logger.warn('Telegram 连接连续失败过多，已自动禁用。5分钟后将自动重试。', {
           operation: 'telegram_auto_disabled',
           metadata: {
             consecutiveFailures: this.consecutiveFailures,
-            hint: '确保 HTTPS_PROXY 环境变量正确配置，或在配置中设置 telegram.enabled: false',
+            hint: '确保 HTTPS_PROXY 环境变量正确配置，或调用 enable() 手动恢复',
           },
         });
         return [];
@@ -241,6 +270,54 @@ export class TelegramAdapter implements PlatformAdapter {
         });
       }
       return [];
+    }
+  }
+
+  /**
+   * 启动自动重试定时器
+   */
+  private startAutoRetry(): void {
+    this.autoRetryTimer = setInterval(async () => {
+      if (!this.telegramDisabled) {
+        this.stopAutoRetry();
+        return;
+      }
+
+      this.logger.info('尝试恢复 Telegram 连接...', {
+        operation: 'telegram_auto_retry',
+      });
+
+      try {
+        // 尝试调用 API
+        await callTelegramApi(
+          this.config.botToken,
+          'getMe',
+          {},
+          { retryAttempts: 1, retryDelay: 1000 }
+        );
+
+        // 成功，恢复正常状态
+        this.telegramDisabled = false;
+        this.consecutiveFailures = 0;
+        this.stopAutoRetry();
+        this.logger.info('Telegram 连接已自动恢复', {
+          operation: 'telegram_auto_recovered',
+        });
+      } catch (err) {
+        this.logger.debug('Telegram 自动重试失败，将继续等待', {
+          operation: 'telegram_auto_retry_failed',
+        });
+      }
+    }, TelegramAdapter.AUTO_RETRY_INTERVAL);
+  }
+
+  /**
+   * 停止自动重试定时器
+   */
+  private stopAutoRetry(): void {
+    if (this.autoRetryTimer) {
+      clearInterval(this.autoRetryTimer);
+      this.autoRetryTimer = undefined;
     }
   }
 
