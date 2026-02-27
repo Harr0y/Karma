@@ -903,13 +903,13 @@ P3_suggestion:
 
 ```yaml
 preconditions:
-  - Karma 服务已启动 (karma server --port 3000)
+  - Karma 服务已启动 (karma server --port 3080)
   - disclaude 环境已配置
   - 所有人设 skill 已就绪
   - 测试报告目录已创建
 
 environment:
-  KARMA_API_URL: "http://localhost:3000"
+  KARMA_API_URL: "http://localhost:3080"
   TEST_REPORT_DIR: "./test-reports"
   LOG_LEVEL: "debug"  # 测试时用 debug 便于排查
 ```

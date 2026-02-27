@@ -106,7 +106,7 @@ The **karma-simulator** is a specialized skill that runs in disclaude to automat
 │  │  • Persistent clientId across requests                     │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
-│  Startup: pnpm server (default port: 3000)                      │
+│  Startup: pnpm server (default port: 3080)                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -173,7 +173,7 @@ pnpm server
 **Verify the server is running:**
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3080/health
 ```
 
 Expected response:
@@ -1009,12 +1009,12 @@ LOG_LEVEL=debug pnpm server
 
 ```bash
 # Create session
-curl -X POST http://localhost:3000/api/session \
+curl -X POST http://localhost:3080/api/session \
   -H "Content-Type: application/json" \
   -d '{"userId": "test", "metadata": {"platform": "manual"}}'
 
 # Send message
-curl -X POST http://localhost:3000/api/chat \
+curl -X POST http://localhost:3080/api/chat \
   -H "Content-Type: application/json" \
   -d '{"sessionId": "sess_xxx", "message": "你好"}'
 ```

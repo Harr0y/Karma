@@ -25,4 +25,4 @@ echo "启动服务器..."
 echo ""
 
 # 启动服务器
-npx tsx src/index.ts server --port 3000
+npx tsx src/index.ts server --port 3080

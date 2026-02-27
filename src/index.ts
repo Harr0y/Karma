@@ -26,7 +26,7 @@ function printUsage() {
     karma --help       显示帮助信息
 
   服务器选项:
-    --port <number>    指定端口 (默认: 配置文件 server.port 或 3000)
+    --port <number>    指定端口 (默认: 配置文件 server.port 或 3080)
     --host <string>    指定主机 (默认: 配置文件 server.host 或 0.0.0.0)
 
   配置文件:

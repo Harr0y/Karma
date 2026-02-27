@@ -59,12 +59,12 @@ cp config.example.yaml config.yaml
 ./start.sh logs
 ```
 
-服务启动后访问 http://localhost:3000
+服务启动后访问 http://localhost:3080
 
 #### 测试环境
 
 测试环境与生产环境完全隔离：
-- 端口：3004（vs 3000）
+- 端口：3004（vs 3080）
 - 数据库：karma-test-data（vs karma-data）
 - 配置：config.test.yaml（vs config.yaml）
 
@@ -89,7 +89,7 @@ docker-compose -f docker-compose.test.yml logs -f
 
 | 项目 | 生产环境 | 测试环境 |
 |------|---------|---------|
-| 端口 | 3000 | 3004 |
+| 端口 | 3080 | 3004 |
 | Volume | karma-data | karma-test-data |
 | 配置文件 | config.yaml | config.test.yaml |
 | 环境变量 | .env | .env.test |
