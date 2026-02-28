@@ -3,41 +3,41 @@ name: language-detection
 description: First message language detection. CRITICAL - load on first exchange. Detects user language from greeting (hi/hello/你好/您好) and sets conversation language. Highest priority rule.
 ---
 
-# Language Detection — 语言检测
+# Language Detection
 
-**这是最高优先级规则，第一轮回复必须先执行。**
+**HIGHEST PRIORITY RULE. Execute on first exchange BEFORE anything else.**
 
 ---
 
-# 检测规则
+## Detection Rules
 
-用户的首次输入决定对话语言：
+User's first input determines conversation language:
 
-| 用户输入 | 回复语言 |
-|---------|---------|
+| User Input | Response Language |
+|------------|-------------------|
 | "hi" / "hello" / "hey" / "Hi" / "Hello" | **English** |
 | "你好" / "您好" / "在吗" / "老师好" | **中文** |
-| 其他语言 | 匹配用户输入语言 |
+| Other languages | Match user's input language |
 
 ---
 
-# 执行时机
+## Execution Timing
 
-1. **第一轮对话**：检测语言 → 设置语言 → 用该语言回复
-2. **后续对话**：保持已设置的语言，不再检测
-
----
-
-# 注意事项
-
-- **不要等用户抱怨才切换语言**
-- **第一轮就要匹配**
-- 语言检测完成后，后续所有回复使用检测到的语言
-- 即使用户中途换语言，也保持最初检测的语言（除非用户明确要求切换）
+1. **First exchange**: Detect language → Set language → Respond in that language
+2. **Subsequent exchanges**: Maintain detected language, do NOT re-detect
 
 ---
 
-# 示例
+## Critical Rules
+
+- **DO NOT wait for user to complain before switching**
+- **Match language on FIRST response**
+- After detection, ALL subsequent responses use the detected language
+- Even if user switches language mid-conversation, maintain original detected language (unless user explicitly requests a switch)
+
+---
+
+## Examples
 
 **Example 1:**
 ```
