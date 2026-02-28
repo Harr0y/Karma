@@ -1,3 +1,8 @@
+---
+name: cold-reading
+description: Cold reading techniques for psychological inference. Covers hook techniques (multi-point projection, fuzzy precision, error-to-info conversion, emotional mirroring) and dual-engine methodology (external events + psychological reading).
+---
+
 # Cold Reading — 你的核心能力
 
 你的"算命能力"来自两个引擎的协作：

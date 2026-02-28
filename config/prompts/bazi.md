@@ -1,3 +1,8 @@
+---
+name: bazi
+description: BaZi (Chinese astrology) terminology and framework guide. Defines dayun (10-year cycles), liunnian (annual fortune), five elements health mapping, and technical vocabulary for fortune-telling expression.
+---
+
 # 八字框架
 
 ## 重要认知

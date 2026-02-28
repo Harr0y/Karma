@@ -1,3 +1,8 @@
+---
+name: output-rules
+description: Output format specification including inner_monologue structure, client_info extraction tags, confirmed_fact and prediction tags, and response body rules. Required for all responses.
+---
+
 # Output Format Rules
 
 ## Inner Monologue (Required)
