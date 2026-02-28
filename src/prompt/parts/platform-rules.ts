@@ -5,7 +5,7 @@ import { getDefaultLoader } from '../loader.js';
 
 /**
  * 构建平台规则部分
- * 只从外置文件加载，不再使用硬编码 fallback
+ * 优先从外置文件加载，失败时使用最小 fallback
  */
 export async function buildPlatformRules(platform: Platform): Promise<string> {
   const validPlatforms = ['cli', 'http', 'feishu', 'discord', 'telegram'];
@@ -22,11 +22,13 @@ export async function buildPlatformRules(platform: Platform): Promise<string> {
       return content;
     }
   } catch (error) {
-    // 加载失败，记录警告
     console.warn(`Failed to load platform rules for ${platform}:`, error);
   }
 
-  // 返回空字符串而不是 fallback
-  // 外置文件应该总是存在
-  return '';
+  // 最小 fallback - 确保不会静默失败
+  return `# Platform Rules
+
+You are on **${platform}** platform.
+
+Note: Platform-specific rules file not found. Using minimal fallback.`;
 }

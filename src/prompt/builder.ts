@@ -64,9 +64,9 @@ export async function buildSystemPrompt(
   // 7. 平台规则 (现在是 async)
   parts.push(await buildPlatformRules(context.platform));
 
-  // 8. 工具使用指南
+  // 8. 工具使用指南 (现在是 async)
   if (includeToolGuidelines) {
-    parts.push(buildToolGuidelines());
+    parts.push(await buildToolGuidelines());
   }
 
   // 9. 输出格式规则 (现在是 async)
