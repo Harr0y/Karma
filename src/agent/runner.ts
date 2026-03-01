@@ -317,13 +317,16 @@ export class AgentRunner {
           // 6. 提取并保存结构化信息
           await this.extractAndSaveInfo(rawContent, session);
 
-          // 7. 保存助手消息
+          // 7. 保存助手消息（包含 rawContent 用于审计）
           if (assistantContent) {
-            await storage.addMessage(session.id, 'assistant', assistantContent);
+            await storage.addMessage(session.id, 'assistant', assistantContent, rawContent);
             this.logger.debug('助手消息已保存', {
               operation: 'message_save',
               sessionId: session.id,
-              metadata: { contentLength: assistantContent.length },
+              metadata: {
+                contentLength: assistantContent.length,
+                rawContentLength: rawContent.length,
+              },
             });
           }
 

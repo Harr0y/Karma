@@ -34,9 +34,12 @@ export function formatSkillsForPrompt(skills: Skill[]): string {
 
   const lines: string[] = [
     '',
-    'The following skills provide specialized instructions for specific tasks.',
-    'Use the Read tool to load a skill\'s file when the task matches its description.',
-    'When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path).',
+    '# Available Skills',
+    '',
+    'The following skills provide specialized instructions. When you need a skill:',
+    '1. Find the skill by name in the list below',
+    '2. Use the Read tool with the EXACT <location> path provided',
+    '3. DO NOT guess or hallucinate skill paths - only use the locations shown below',
     '',
     '<available_skills>',
   ];
@@ -50,6 +53,8 @@ export function formatSkillsForPrompt(skills: Skill[]): string {
   }
 
   lines.push('</available_skills>');
+  lines.push('');
+  lines.push('Example: To load a skill, use Read tool with file_path = the <location> value from above');
 
   return lines.join('\n');
 }
