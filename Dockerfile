@@ -44,9 +44,11 @@ FROM node:20-alpine AS production
 
 # Install runtime dependencies
 # - python3, make, g++: for better-sqlite3
-# - gh: GitHub CLI for reading repos/issues
 # - curl: for Jina Reader web page fetching
-RUN apk add --no-cache python3 make g++ gh curl
+# - github-cli: GitHub CLI for reading repos/issues (from community repo)
+# - py3-pip: for yt-dlp installation
+RUN apk add --no-cache python3 make g++ curl py3-pip && \
+    apk add --no-cache github-cli --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
