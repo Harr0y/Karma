@@ -9,6 +9,7 @@ import { buildPlatformRules } from './parts/platform-rules.js';
 import { buildToolGuidelines } from './parts/tool-guidelines.js';
 import { buildOutputRules } from './parts/output-rules.js';
 import { buildFirstImpression } from './parts/first-impression.js';
+import { buildLanguageDetection } from './parts/language-detection.js';
 import { formatSkillsForPrompt } from '@/skills/formatter.js';
 
 /**
@@ -33,7 +34,10 @@ export async function buildSystemPrompt(
   // 2. 人设 (可从 SOUL.md 加载或外置文件)
   parts.push(await buildPersona(context.personaConfig));
 
-  // 2.5 首次接触规则 (前几轮对话的关键指导)
+  // 2.5 语言检测 (最高优先级，第一轮必须执行)
+  parts.push(await buildLanguageDetection());
+
+  // 2.6 首次接触规则 (前几轮对话的关键指导)
   parts.push(await buildFirstImpression());
 
   // 3. 八字框架 (核心方法，现在是 async)
@@ -60,9 +64,9 @@ export async function buildSystemPrompt(
   // 7. 平台规则 (现在是 async)
   parts.push(await buildPlatformRules(context.platform));
 
-  // 8. 工具使用指南
+  // 8. 工具使用指南 (现在是 async)
   if (includeToolGuidelines) {
-    parts.push(buildToolGuidelines());
+    parts.push(await buildToolGuidelines());
   }
 
   // 9. 输出格式规则 (现在是 async)

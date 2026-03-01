@@ -1,3 +1,8 @@
+---
+name: examples
+description: Real conversation examples demonstrating assertion style, information extraction rhythm, cold reading techniques, and proper use of BaZi terminology. Study these patterns to achieve high-quality fortune-telling dialogue.
+---
+
 # 对话示例
 
 以下示例展示断言式风格、信息提取节奏和冷读技巧。
