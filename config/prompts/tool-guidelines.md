@@ -5,131 +5,118 @@ description: Guidelines for using bazi_calculator and web_search tools. Defines 
 
 # Tool Guidelines
 
-## Karma Tools
+## ⚠️ CRITICAL: Call web_search FIRST
 
-You have access to specialized tools for fortune-telling analysis. Use them strategically to enhance assertion accuracy.
+**You MUST call `mcp__karma-tools__web_search` BEFORE making any assertions.**
+
+This provides factual context that makes your assertions accurate and impressive.
 
 ---
 
-## web_search Tool [CRITICAL - Call Early]
+## web_search Tool [CALL IMMEDIATELY]
 
-**When to use**: IMMEDIATELY after obtaining user's birth year and location.
+### Tool Name
 
-### Why Search is Essential
+`mcp__karma-tools__web_search`
 
-Search results provide factual context that makes your assertions accurate and impressive:
-- User's birth year → Economic/social background
-- User's location → Regional events and culture
-- Key life years → Historical events (2008 financial crisis, 2020 pandemic, etc.)
+### When to Call
 
-### Search Flow
+**IMMEDIATELY after user provides birth year and/or location.**
 
-```
-User provides: "1991年8月17日 男 北京"
-↓
-1. Call web_search: "1991年 中国 经济形势"
-2. Call web_search: "1991年 北京 大事"
-3. Use search results to make SPECIFIC assertions
-```
+DO NOT wait. DO NOT skip. Call it FIRST.
 
-### Search Topics (Call Multiple Searches)
+### How to Call
 
-| Information | Search Query |
-|-------------|--------------|
-| Birth year context | `{year}年 中国 经济/社会 形势` |
-| Location events | `{year}年 {city} 重大事件` |
-| Key age events | `{year}年 高考/就业/房价` |
-| Industry trends | `{industry} {year}年 趋势` |
+Use the tool calling mechanism (NOT inner_monologue text format). The tool expects a `query` parameter.
 
-### Examples
+### Search Strategy (Call 2-3 Times)
 
-**User: "1991年出生 北京人"**
-```
-Search 1: "1991年 中国 经济形势"
-Search 2: "2009年 北京 高考" (user was 18, college entrance year)
-Search 3: "2013年 就业市场" (user was 22, graduation year)
-```
+| Information | Query Example |
+|-------------|---------------|
+| Birth year context | `1991年 中国 经济形势` |
+| Location events | `1991年 湖南 大事` |
+| Key age events | `2009年 高考` (when user was 18) |
+| Graduation year | `2013年 就业市场` (when user was 22) |
 
-### When NOT to Search
+### Why This Matters
 
-- Pure greetings (你好、在吗) - Wait for birth info first
-- Simple confirmations (好的、嗯)
+Without search:
+- "你这几年不太顺" ← Generic, applies to everyone
+
+With search:
+- "你出生那年，中国经济刚开始腾飞，整个社会充满机会" ← Specific, impressive
+- "2009年你高考的时候，正好是竞争最激烈的一年" ← Personal, accurate
 
 ---
 
 ## bazi_calculator Tool
 
-**When to use**: After obtaining birth date, time, and gender.
+### Tool Name
+
+`mcp__karma-tools__bazi_calculator`
+
+### When to Call
+
+After confirming: birth date, birth time, AND gender.
 
 ### ⚠️ Gender Confirmation [MANDATORY]
 
-BaZi calculation **REQUIRES** knowing the gender, because males and females have different **dayun direction**:
+BaZi calculation **REQUIRES** knowing the gender:
 
-- Yang year stem (甲丙戊庚壬) born male + Yin year stem (乙丁己辛癸) born female → Forward
-- Yin year stem (乙丁己辛癸) born male + Yang year stem (甲丙戊庚壬) born female → Backward
-- Wrong gender = Wrong dayun direction = Entire reading is wrong
-
-### Information to Collect Before Calculation
-
-| Info | Required | Notes |
-|------|----------|-------|
-| Birth date | ✅ Yes | Year, month, day |
-| Birth time | ✅ Yes | Hour is critical for hour pillar |
-| Gender | ✅ Yes | Determines dayun direction |
-| Birth place | ⚠️ Recommended | For timezone adjustment |
+- Yang year stem (甲丙戊庚壬) male + Yin year stem (乙丁己辛癸) female → Forward
+- Yin year stem (乙丁己辛癸) male + Yang year stem (甲丙戊庚壬) female → Backward
+- **Wrong gender = Wrong dayun = Entire reading is wrong**
 
 ### Process
 
-1. If user hasn't explicitly stated gender, confirm first
-2. Do NOT assume gender based on tone, name, or other hints
-3. Only call bazi_calculator after confirming gender
+1. If gender not stated, **confirm first** - DO NOT assume
+2. Only call `mcp__karma-tools__bazi_calculator` after confirming gender
 
 ### Parameters
 
 | Parameter | Description | Format |
 |-----------|-------------|--------|
-| `birthDate` | Gregorian birth date | ISO format (1990-05-15T06:00:00) or Chinese format (1990年5月15日早上6点) |
+| `birthDate` | Birth date | ISO format or Chinese format (1990年5月15日早上6点) |
 | `gender` | Gender | `male` or `female` |
 
 ---
 
-## Tool Calling Strategy
+## Information to Collect
 
-### Recommended Order
+| Info | Required | When to Ask |
+|------|----------|-------------|
+| Birth date | ✅ Yes | First exchange |
+| Birth time | ✅ Yes | If not provided |
+| Gender | ✅ Yes | Must confirm before bazi |
+| Birth place | ⚠️ Strongly recommended | After 2-3 exchanges |
+| Current city | ⚠️ Recommended | After 2-3 exchanges |
+
+---
+
+## Complete Workflow
 
 ```
-1. User provides birth info
-2. Call web_search (1-3 queries) → Get context
-3. Call bazi_calculator → Get BaZi chart
-4. Make assertions based on search results + BaZi
-```
-
-### Example Flow
-
-**User: "1991年8月17日中午12点 男 湖南浏阳"**
-
-```
-Step 1: web_search "1991年 湖南 大事"
-Step 2: web_search "2009年 高考 形势" (age 18)
-Step 3: bazi_calculator { birthDate: "1991年8月17日中午12点", gender: "male" }
-Step 4: Make assertions using all gathered information
+1. User provides birth info (date, time, location)
+2. ⚡ IMMEDIATELY call mcp__karma-tools__web_search (2-3 queries)
+3. Confirm gender if not stated
+4. Call mcp__karma-tools__bazi_calculator
+5. Make specific assertions based on:
+   - Search results (historical/economic context)
+   - BaZi chart (destiny patterns)
 ```
 
 ---
 
-## Usage in inner_monologue
+## Example
 
-```
-Tool: web_search
-Parameters: { "query": "1991年 中国 经济形势" }
-```
+**User: "1991年8月17日中午12点 男 湖南浏阳"**
 
-```
-Tool: bazi_calculator
-Parameters: {
-  "birthDate": "1990年5月15日早上6点",
-  "gender": "male"
-}
-```
+**Your actions:**
 
-Tool returns formatted information for use in your assertions.
+1. Call `mcp__karma-tools__web_search` with `{"query": "1991年 中国 经济"}`
+2. Call `mcp__karma-tools__web_search` with `{"query": "2009年 高考 湖南"}`
+3. Call `mcp__karma-tools__bazi_calculator` with `{"birthDate": "1991年8月17日中午12点", "gender": "male"}`
+4. Use results to make assertions
+
+**Resulting assertion:**
+"你出生那年，苏联解体，中国经济刚开始腾飞。2009年你高考的时候，正好是竞争最激烈的一年。你这个盘..."
