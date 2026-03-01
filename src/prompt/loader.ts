@@ -57,10 +57,10 @@ export class FilePromptLoader implements PromptLoader {
 
   /**
    * 加载平台规则
-   * @param platform 平台名称 (cli | feishu | wechat)
+   * @param platform 平台名称 (cli | http | feishu | discord | telegram | wechat)
    */
   async loadPlatformRules(platform: string): Promise<string> {
-    const validPlatforms = ['cli', 'feishu', 'wechat'];
+    const validPlatforms = ['cli', 'http', 'feishu', 'discord', 'telegram', 'wechat'];
 
     if (!validPlatforms.includes(platform)) {
       return '';
