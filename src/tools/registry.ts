@@ -5,7 +5,6 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { calculateBazi, formatBaziResult } from './bazi-calculator.js';
 import type { BaziInput } from './bazi-calculator.js';
-import { webSearch, formatSearchResult } from './web-search.js';
 
 // ============================================================================
 // Schema 定义（提到函数外，避免重复创建）
@@ -17,13 +16,6 @@ import { webSearch, formatSearchResult } from './web-search.js';
 const baziSchema = {
   birthDate: z.string().describe('公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）'),
   gender: z.enum(['male', 'female']).describe('性别：male（男）或 female（女）'),
-};
-
-/**
- * WebSearch 工具的 Zod Schema
- */
-const webSearchSchema = {
-  query: z.string().describe('搜索查询词，例如 "2008年 北京 重大事件" 或 "2015年 中国经济形势"'),
 };
 
 // ============================================================================
@@ -72,43 +64,11 @@ export function createKarmaMcpServer() {
     }
   );
 
-  // 创建 WebSearch 工具
-  const webSearchTool = tool(
-    'web_search',
-    '搜索互联网上的信息，主要用于验证历史事件、经济形势、地域文化等。当你需要了解用户出生年份或关键人生节点发生的事件时使用此工具。',
-    webSearchSchema,
-    async (args, _extra) => {
-      try {
-        const result = await webSearch(args.query);
-        const formatted = formatSearchResult(result);
-
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: formatted,
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `搜索失败: ${error.message}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    }
-  );
-
-  // 创建并返回 MCP Server
+  // 创建并返回 MCP Server（只包含 bazi_calculator，搜索使用模型内置 MCP）
   return createSdkMcpServer({
     name: 'karma-tools',
     version: '1.0.0',
-    tools: [baziTool, webSearchTool],
+    tools: [baziTool],
   });
 }
 
@@ -126,13 +86,6 @@ const toolMetadata = [
     parameters: [
       { name: 'birthDate', description: '公历生日，支持 ISO 格式（1990-05-15T06:00:00）或中文格式（1990年5月15日早上6点）' },
       { name: 'gender', description: '性别：male（男）或 female（女）' },
-    ],
-  },
-  {
-    name: 'web_search',
-    description: '搜索互联网上的信息，主要用于验证历史事件、经济形势、地域文化等。当你需要了解用户出生年份或关键人生节点发生的事件时使用此工具。搜索格式：{年份}年 {城市/省份} {领域} 大事',
-    parameters: [
-      { name: 'query', description: '搜索查询词，例如 "2008年 北京 重大事件" 或 "2015年 中国经济形势"' },
     ],
   },
 ];

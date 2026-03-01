@@ -1,23 +1,19 @@
 ---
 name: tool-guidelines
-description: Guidelines for using bazi_calculator and web_search tools. Defines when and how to call tools, gender confirmation rules, and search query format. Essential for fortune-telling workflow.
+description: Guidelines for using bazi_calculator and search tools. Defines when and how to call tools, gender confirmation rules, and search query format. Essential for fortune-telling workflow.
 ---
 
 # Tool Guidelines
 
-## ⚠️ CRITICAL: Call web_search FIRST
+## ⚠️ CRITICAL: Call Search FIRST
 
-**You MUST call `mcp__karma-tools__web_search` BEFORE making any assertions.**
+**You MUST use the available web search tool BEFORE making any assertions about historical events or economic context.**
 
 This provides factual context that makes your assertions accurate and impressive.
 
 ---
 
-## web_search Tool [CALL IMMEDIATELY]
-
-### Tool Name
-
-`mcp__karma-tools__web_search`
+## Web Search Tool [CALL IMMEDIATELY]
 
 ### When to Call
 
@@ -27,7 +23,7 @@ DO NOT wait. DO NOT skip. Call it FIRST.
 
 ### How to Call
 
-Use the tool calling mechanism (NOT inner_monologue text format). The tool expects a `query` parameter.
+Use the tool calling mechanism to search the web. The tool expects a `query` parameter.
 
 ### Search Strategy (Call 2-3 Times)
 
@@ -97,7 +93,7 @@ BaZi calculation **REQUIRES** knowing the gender:
 
 ```
 1. User provides birth info (date, time, location)
-2. ⚡ IMMEDIATELY call mcp__karma-tools__web_search (2-3 queries)
+2. ⚡ IMMEDIATELY search the web (2-3 queries)
 3. Confirm gender if not stated
 4. Call mcp__karma-tools__bazi_calculator
 5. Make specific assertions based on:
@@ -113,8 +109,8 @@ BaZi calculation **REQUIRES** knowing the gender:
 
 **Your actions:**
 
-1. Call `mcp__karma-tools__web_search` with `{"query": "1991年 中国 经济"}`
-2. Call `mcp__karma-tools__web_search` with `{"query": "2009年 高考 湖南"}`
+1. Search web for `1991年 中国 经济`
+2. Search web for `2009年 高考 湖南`
 3. Call `mcp__karma-tools__bazi_calculator` with `{"birthDate": "1991年8月17日中午12点", "gender": "male"}`
 4. Use results to make assertions
 

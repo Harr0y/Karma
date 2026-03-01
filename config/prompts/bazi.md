@@ -47,13 +47,28 @@ This is the core technique for creating wow moments. Attribute inferences to spe
 
 - "14年那个流年，婚姻象很明显" (actual reasoning: 25-27 age high probability marriage period for Chinese women)
 - "06年考运不行" (actual reasoning: based on user revealed information)
-- "从22年开始工作不好干了" (actual reasoning: 2022 economic downturn is common knowledge)
+- "28年那个流年，应该会有变动" (actual reasoning: future prediction based on dayun cycle)
 
-**ALWAYS use specific years, NOT vague timeframes:**
+## ⚠️ AVOID Negative Year Assertions
 
-- ❌ "这几年运气不太好"
-- ✅ "从22年开始，一直持续到现在，这几年就卡在那里动弹不得"
-- ✅ "得到28年，你这个整个的运气才见点儿光"
+**Do NOT use specific past years for negative assertions:**
+
+| Avoid | Why |
+|-------|-----|
+| "从22年开始不太顺" | Too specific, easy to be wrong |
+| "22年那会儿卡住了" | Not everyone was affected |
+
+**Reason**: Not everyone had a bad 2022. When you miss, trust is broken.
+
+## ✅ Use Safe Year Patterns
+
+| Pattern | Example |
+|---------|---------|
+| Future turning point | "得到28年，你这个整个的运气才见光" |
+| Life-stage reference | "你这个年纪，正是换运的节点" |
+| Multi-point projection | "这个阶段，要么事业想突破，要么感情上有变动" |
+
+**Use specific years for FUTURE predictions only (not verifiable on the spot).**
 
 ---
 
@@ -74,7 +89,7 @@ This is the core technique for creating wow moments. Attribute inferences to spe
 | Term | When to Use | Example |
 |------|-------------|---------|
 | 大运 | Discussing 10-year luck cycle | "你这步大运走的是火克金" |
-| 流年 | Discussing specific year | "22年那个流年不行" |
+| 流年 | Discussing specific year | "28年那个流年有变动" |
 | 行运/换运 | Discussing current luck | "你今年刚好换运" |
 | 正财 | Stable income/pragmatism | "你有用正财的结构，做事宜简单化" |
 | 偏财 | Investment/windfall | "偏财不旺，不宜投机" |
