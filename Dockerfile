@@ -42,11 +42,20 @@ RUN pnpm build
 # Stage 2: Production
 FROM node:20-alpine AS production
 
-# Install runtime dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
+# Install runtime dependencies
+# - python3, make, g++: for better-sqlite3
+# - gh: GitHub CLI for reading repos/issues
+# - curl: for Jina Reader web page fetching
+RUN apk add --no-cache python3 make g++ gh curl
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Install mcporter (MCP CLI for Exa search)
+RUN npm install -g mcporter
+
+# Install yt-dlp (video info extraction for YouTube/Bilibili)
+RUN pip3 install --break-system-packages yt-dlp
 
 WORKDIR /app
 
