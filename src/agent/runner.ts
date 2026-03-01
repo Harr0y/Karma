@@ -146,6 +146,8 @@ export class AgentRunner {
       mcpServers: {
         'karma-tools': createKarmaMcpServer(),
       },
+      // 禁用 WebSearch（改用 mcporter Exa 搜索）
+      disallowedTools: ['WebSearch'],
     };
 
     let q;
