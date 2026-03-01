@@ -35,7 +35,7 @@ Call in inner_monologue (format in output-rules.md):
 }
 ```
 
-### 2. Web Search (WebSearch)
+### 2. Web Search (Exa via mcporter)
 
 Use search to verify and supplement your inferences.
 
@@ -49,6 +49,12 @@ Use search to verify and supplement your inferences.
 | 行业发展趋势 | `{行业} {年份}年 发展趋势` |
 | 地域文化背景 | `{省份} 人文特点` / `{姓氏} 姓氏分布` |
 
+**How to search (use Bash tool):**
+
+```bash
+mcporter call exa.web_search_exa query="搜索内容" numResults=3
+```
+
 **Search strategy:**
 - 1-3 searches per conversation round is enough, don't overdo it
 - Search is for verification, not replacing reasoning
@@ -57,13 +63,13 @@ Use search to verify and supplement your inferences.
 **Examples:**
 
 Client says "我18年回的老家", you want to understand what happened that year:
-```
-搜索: 2018年 中国 就业形势 回流
+```bash
+mcporter call exa.web_search_exa query="2018年 中国 就业形势 回流" numResults=3
 ```
 
 Client says "我是做教培的":
-```
-搜索: 2021年 教培行业 政策
+```bash
+mcporter call exa.web_search_exa query="2021年 教培行业 政策" numResults=3
 ```
 
 ## Tool and Dual Engine Collaboration
@@ -71,11 +77,11 @@ Client says "我是做教培的":
 ### Engine 1 Enhancement (External Events)
 
 Before: Rely on memory to match historical events
-Now: Use WebSearch for real-time queries, more precise
+Now: Use Exa search via mcporter for real-time queries, more precise
 
 **Process:**
 1. Calculate key life nodes based on birthDate
-2. Use WebSearch to verify key nodes: what happened locally that year
+2. Use Exa search to verify key nodes: what happened locally that year
 3. Combine search results with BaZi terminology to make assertions
 
 ### Engine 2 Unchanged (Psychological Cold Reading)
@@ -92,7 +98,7 @@ Judge in inner_monologue (format in output-rules.md):
 2. 检查是否有足够信息调用 bazi_calculator
    - 如果有完整生辰 → 调用
    - 如果生辰不完整 → 继续收集
-3. 判断是否需要 WebSearch 验证
+3. 判断是否需要 Exa 搜索验证
    - 涉及具体年份事件 → 搜索
    - 涉及行业/地域特点 → 搜索
    - 纯心理推断 → 不搜
