@@ -12,6 +12,7 @@ import {
   extractClientInfo,
   extractAllFacts,
   extractAllPredictions,
+  extractClientInfoFallback,
 } from './info-extractor.js';
 import { getLogger } from '@/logger/index.js';
 import type { Logger } from '@/logger/types.js';
@@ -392,8 +393,19 @@ export class AgentRunner {
   ): Promise<void> {
     const { storage } = this.config;
 
-    // 1. 提取客户信息
-    const clientInfo = extractClientInfo(rawContent);
+    // 1. 提取客户信息（优先使用标签提取，失败时使用 fallback）
+    let clientInfo = extractClientInfo(rawContent);
+    if (!clientInfo) {
+      // Fallback: 从原始文本中提取
+      clientInfo = extractClientInfoFallback(rawContent);
+      if (clientInfo) {
+        this.logger.debug('使用 fallback 提取客户信息', {
+          operation: 'client_info_fallback',
+          sessionId: session.id,
+          metadata: { ...clientInfo },
+        });
+      }
+    }
     if (clientInfo) {
       await this.handleClientInfo(clientInfo, session);
     }

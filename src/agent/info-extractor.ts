@@ -161,3 +161,72 @@ export function extractAllPredictions(text: string): ExtractedPrediction[] {
 
   return predictions;
 }
+
+/**
+ * Fallback: 从原始文本中提取客户信息（当 AI 不输出标签时）
+ *
+ * 尝试从文本中识别常见的客户信息模式
+ */
+export function extractClientInfoFallback(text: string): ExtractedClientInfo | null {
+  const info: ExtractedClientInfo = {};
+
+  // 提取性别
+  if (text.includes('男') && !text.includes('难')) {
+    info.gender = 'male';
+  } else if (text.includes('女')) {
+    info.gender = 'female';
+  }
+
+  // 提取出生日期 - 多种格式
+  // 格式1: 1990年5月15日
+  const dateMatch1 = text.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]/);
+  if (dateMatch1) {
+    info.birthDate = `${dateMatch1[1]}年${dateMatch1[2]}月${dateMatch1[3]}日`;
+  }
+
+  // 格式2: 1990-05-15
+  if (!info.birthDate) {
+    const dateMatch2 = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (dateMatch2) {
+      info.birthDate = `${dateMatch2[1]}年${parseInt(dateMatch2[2], 10)}月${parseInt(dateMatch2[3], 10)}日`;
+    }
+  }
+
+  // 提取出生地 - 常见模式
+  const placePatterns = [
+    /出生(?:在|于|地[：:]?)\s*([^\s，。！？,\n]+)/,
+    /([^\s，。！？,\n]+)(?:人|出生)/,
+  ];
+  for (const pattern of placePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1].length >= 2 && match[1].length <= 10) {
+      // 过滤掉一些常见干扰词
+      const excludeWords = ['男', '女', '单身', '已婚', '未婚', '离婚'];
+      if (!excludeWords.includes(match[1])) {
+        info.birthPlace = match[1];
+        break;
+      }
+    }
+  }
+
+  // 提取现居地
+  const cityPatterns = [
+    /现(?:在|居|住)[：:]?\s*([^\s，。！？,\n]+)/,
+    /在\s*([^\s，。！？,\n]+)\s*(?:工作|发展|生活)/,
+  ];
+  for (const pattern of cityPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1].length >= 2 && match[1].length <= 10) {
+      const excludeWords = ['男', '女', '单身', '已婚', '未婚', '离婚', '做', '是', '有'];
+      if (!excludeWords.includes(match[1])) {
+        info.currentCity = match[1];
+        break;
+      }
+    }
+  }
+
+  // 如果没有提取到任何信息，返回 null
+  if (Object.keys(info).length === 0) return null;
+
+  return info;
+}
