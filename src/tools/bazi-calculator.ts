@@ -37,6 +37,80 @@ export interface BaziResult {
 }
 
 /**
+ * 中文数字映射表
+ */
+const CHINESE_NUM_MAP: Record<string, number> = {
+  '零': 0, '〇': 0,
+  '一': 1, '壹': 1,
+  '二': 2, '贰': 2, '两': 2,
+  '三': 3, '叁': 3,
+  '四': 4, '肆': 4,
+  '五': 5, '伍': 5,
+  '六': 6, '陆': 6,
+  '七': 7, '柒': 7,
+  '八': 8, '捌': 8,
+  '九': 9, '玖': 9,
+  '十': 10, '拾': 10,
+  '十一': 11, '十二': 12,
+};
+
+/**
+ * 将中文数字转换为阿拉伯数字
+ * 支持：一、二、三...十一、十二，以及组合如"二十三"
+ */
+function chineseToArabic(str: string): number | null {
+  // 如果已经是数字，直接返回
+  if (/^\d+$/.test(str)) {
+    return parseInt(str, 10);
+  }
+
+  // 直接匹配简单中文数字
+  if (CHINESE_NUM_MAP[str] !== undefined) {
+    return CHINESE_NUM_MAP[str];
+  }
+
+  // 处理组合数字如"二十三"、"十五"
+  let result = 0;
+  let i = 0;
+
+  while (i < str.length) {
+    const char = str[i];
+    const nextChar = str[i + 1];
+
+    if (char === '十' || char === '拾') {
+      // 如果"十"在开头或前面没有数字，表示10
+      if (result === 0) {
+        result = 10;
+      } else {
+        // 否则是乘数，如"二十" = 2 * 10
+        result *= 10;
+      }
+      // 检查后面是否还有个位数
+      if (nextChar && CHINESE_NUM_MAP[nextChar] !== undefined && nextChar !== '十') {
+        result += CHINESE_NUM_MAP[nextChar];
+        i += 2;
+        continue;
+      }
+    } else if (CHINESE_NUM_MAP[char] !== undefined) {
+      if (nextChar === '十' || nextChar === '拾') {
+        // 如"二十"，先记下十位数
+        result = CHINESE_NUM_MAP[char] * 10;
+        i += 2;
+        // 检查是否还有个位
+        if (i < str.length && CHINESE_NUM_MAP[str[i]] !== undefined && str[i] !== '十') {
+          result += CHINESE_NUM_MAP[str[i]];
+        }
+        continue;
+      }
+      result = CHINESE_NUM_MAP[char];
+    }
+    i++;
+  }
+
+  return result > 0 ? result : null;
+}
+
+/**
  * 解析出生日期字符串
  */
 export function parseBirthDate(dateStr: string): Date | null {
@@ -48,24 +122,31 @@ export function parseBirthDate(dateStr: string): Date | null {
     return new Date(isoDate);
   }
 
-  // 尝试中文格式：1990年5月15日早上6点
+  // 尝试中文格式：1990年5月15日早上6点 或 早晨五点钟
+  // 支持阿拉伯数字和中文数字
   const chineseMatch = dateStr.match(
-    /(\d{4})年(\d{1,2})月(\d{1,2})日(?:([上下]午|早上?|下午|晚上?|中午|凌晨)?(\d{1,2})[点时])?/
+    /(\d{4})年(\d{1,2})月(\d{1,2})日(?:([上下]午|早上?|下午|晚上?|中午|凌晨)?([零一二三四五六七八九十\d]+)[点时])?/
   );
   if (chineseMatch) {
     const year = parseInt(chineseMatch[1], 10);
     const month = parseInt(chineseMatch[2], 10) - 1; // 0-indexed
     const day = parseInt(chineseMatch[3], 10);
-    let hour = chineseMatch[5] ? parseInt(chineseMatch[5], 10) : 12;
+
+    // 解析小时（支持中文数字）
+    let hour = 12; // 默认中午
+    if (chineseMatch[5]) {
+      const parsedHour = chineseToArabic(chineseMatch[5]);
+      if (parsedHour !== null && parsedHour >= 0 && parsedHour <= 23) {
+        hour = parsedHour;
+      }
+    }
 
     // 处理上午/下午
     const period = chineseMatch[4];
     if (period && (period.includes('下') || period.includes('晚'))) {
       if (hour < 12) hour += 12;
     }
-    if (period && (period.includes('凌晨') || period.includes('早'))) {
-      // 凌晨保持原样
-    }
+    // 凌晨/早上保持原样（已经是24小时制）
 
     return new Date(year, month, day, hour, 0, 0);
   }

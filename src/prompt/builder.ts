@@ -10,6 +10,8 @@ import { buildToolGuidelines } from './parts/tool-guidelines.js';
 import { buildOutputRules } from './parts/output-rules.js';
 import { buildFirstImpression } from './parts/first-impression.js';
 import { buildLanguageDetection } from './parts/language-detection.js';
+import { buildAccuracyGuidelines } from './parts/accuracy-guidelines.js';
+import { buildMisinterpretations } from './parts/misinterpretations.js';
 import { formatSkillsForPrompt } from '@/skills/formatter.js';
 
 /**
@@ -49,6 +51,12 @@ export async function buildSystemPrompt(
   if (includeColdReading) {
     parts.push(await buildColdReadingEngine());
   }
+
+  // 4.5 准确度指南 (新增，基于审计反馈)
+  parts.push(await buildAccuracyGuidelines());
+
+  // 4.6 常见误读警示 (新增，基于审计反馈)
+  parts.push(await buildMisinterpretations());
 
   // 5. Skills 索引 (动态)
   const skillsPrompt = formatSkillsForPrompt(context.skills);
