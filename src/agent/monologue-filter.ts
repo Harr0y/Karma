@@ -37,6 +37,16 @@ const TOOL_CALL_END = '*Executing on server...*';
 const MAX_TOOL_CALL_LENGTH = 5000; // 工具调用最大长度
 
 /**
+ * 验证是否为真正的工具调用格式
+ * 在检测到开始标记后，需要验证后续内容是否符合工具调用模式
+ */
+const TOOL_CALL_VALIDATION_PATTERNS = [
+  /Z\.ai Built-in Tool:/i,
+  /MCP Tool:/i,
+  /\*\*Input:\*\*/i,
+];
+
+/**
  * 需要完全过滤的标签（内容也过滤）
  */
 const FULL_FILTER_TAGS = [
@@ -139,14 +149,24 @@ export class MonologueFilter {
       // 检测工具调用开始
       const toolCallStartIdx = this.buffer.indexOf(TOOL_CALL_START);
       if (toolCallStartIdx !== -1 && !this.insideTag) {
-        // 输出开始标记之前的内容
-        const before = this.buffer.slice(0, toolCallStartIdx);
-        if (before.length > 0) {
-          output.push(before);
+        // 检查是否有足够的后续内容来验证是否为真正的工具调用
+        const afterStart = this.buffer.slice(toolCallStartIdx);
+        if (afterStart.length >= 50) {
+          // 有足够的内容，验证是否为工具调用
+          const isToolCall = TOOL_CALL_VALIDATION_PATTERNS.some(pattern => pattern.test(afterStart));
+          if (isToolCall) {
+            // 确认是工具调用，输出开始标记之前的内容
+            const before = this.buffer.slice(0, toolCallStartIdx);
+            if (before.length > 0) {
+              output.push(before);
+            }
+            this.buffer = this.buffer.slice(toolCallStartIdx);
+            this.insideToolCall = true;
+            continue;
+          }
+          // 不是工具调用，正常输出（跳过检测到的位置，继续处理）
         }
-        this.buffer = this.buffer.slice(toolCallStartIdx);
-        this.insideToolCall = true;
-        continue;
+        // 内容不足 50 字符，继续缓冲
       }
 
       if (this.insideTag) {
