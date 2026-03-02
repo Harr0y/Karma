@@ -176,8 +176,9 @@ export function parseBirthDate(dateStr: string): Date | null {
 
   // 尝试中文格式：1990年5月15日早上6点 或 早晨五点钟
   // 支持阿拉伯数字和中文数字
+  // 修复：支持 "号" 和 "早晨" 等更多时间表述
   const chineseMatch = dateStr.match(
-    /(\d{4})年(\d{1,2})月(\d{1,2})日(?:([上下]午|早上?|下午|晚上?|中午|凌晨)?([零一二三四五六七八九十\d]+)[点时])?/
+    /(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号](?:([上下]午|早晨?|早上?|下午|晚上?|中午|凌晨|傍晚)?([零一二三四五六七八九十\d]+)[点时钟])?/
   );
   if (chineseMatch) {
     const year = parseInt(chineseMatch[1], 10);
@@ -198,7 +199,7 @@ export function parseBirthDate(dateStr: string): Date | null {
     if (period && (period.includes('下') || period.includes('晚'))) {
       if (hour < 12) hour += 12;
     }
-    // 凌晨/早上保持原样（已经是24小时制）
+    // 凌晨/早上/早晨 保持原样（已经是24小时制）
 
     return new Date(year, month, day, hour, 0, 0);
   }
