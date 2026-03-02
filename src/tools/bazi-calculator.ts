@@ -111,6 +111,44 @@ function chineseToArabic(str: string): number | null {
 }
 
 /**
+ * 农历月份名称映射
+ */
+const LUNAR_MONTH_MAP: Record<string, number> = {
+  '正月': 1, '一月': 1,
+  '二月': 2, '三月': 3, '四月': 4, '五月': 5, '六月': 6,
+  '七月': 7, '八月': 8, '九月': 9, '十月': 10,
+  '十一月': 11, '冬月': 11, '腊月': 12, '十二月': 12,
+};
+
+/**
+ * 解析农历日期字符串
+ * 支持格式：1990年农历三月初八、庚午年八月十七
+ */
+function parseLunarDate(dateStr: string): { year: number; month: number; day: number } | null {
+  // 匹配农历格式：1990年农历三月初八 或 1990年阴历3月8
+  const lunarMatch = dateStr.match(/(\d{4})年(?:农历|阴历|旧历)([一二三四五六七八九十\d]+)月([一二三四五六七八九十\d]+)/);
+  if (lunarMatch) {
+    const year = parseInt(lunarMatch[1], 10);
+    const month = chineseToArabic(lunarMatch[2]) || parseInt(lunarMatch[2], 10);
+    const day = chineseToArabic(lunarMatch[3]) || parseInt(lunarMatch[3], 10);
+    return { year, month, day };
+  }
+
+  // 匹配腊月/正月等特殊月份
+  const specialMonthMatch = dateStr.match(/(\d{4})年(?:农历|阴历)?(腊月|正月|冬月)([一二三四五六七八九十\d]+)/);
+  if (specialMonthMatch) {
+    const year = parseInt(specialMonthMatch[1], 10);
+    const month = LUNAR_MONTH_MAP[specialMonthMatch[2]];
+    const day = chineseToArabic(specialMonthMatch[3]) || parseInt(specialMonthMatch[3], 10);
+    if (month) {
+      return { year, month, day };
+    }
+  }
+
+  return null;
+}
+
+/**
  * 解析出生日期字符串
  */
 export function parseBirthDate(dateStr: string): Date | null {
@@ -120,6 +158,20 @@ export function parseBirthDate(dateStr: string): Date | null {
   const isoDate = Date.parse(dateStr);
   if (!isNaN(isoDate)) {
     return new Date(isoDate);
+  }
+
+  // 尝试农历格式
+  const lunarInfo = parseLunarDate(dateStr);
+  if (lunarInfo) {
+    try {
+      // 使用 lunar-javascript 将农历转换为公历
+      const lunar = Lunar.fromYmd(lunarInfo.year, lunarInfo.month, lunarInfo.day);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const solar = (lunar as any).getSolar();
+      return new Date(solar.getYear(), solar.getMonth() - 1, solar.getDay(), 12, 0, 0);
+    } catch (e) {
+      // 农历转换失败，继续尝试其他格式
+    }
   }
 
   // 尝试中文格式：1990年5月15日早上6点 或 早晨五点钟

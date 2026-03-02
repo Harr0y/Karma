@@ -14,6 +14,19 @@ const FILTER_TAGS = [
 ] as const;
 
 /**
+ * 需要过滤的工具调用模式
+ * SDK 返回的工具调用信息不应该暴露给用户
+ */
+const TOOL_PATTERNS = [
+  // Z.ai Built-in Tool 格式
+  /\*\*🌐 Z\.ai Built-in Tool: \w+\*\*\s*\n\n\*\*Input:\*\*\s*\n```json\n\{[^}]*\}\n```\s*\n\n\*Executing on server\.\.\.\*\*/g,
+  // 通用工具调用格式（Markdown）
+  /\*\*🌐 \w+ Tool: \w+\*\*[\s\S]*?\*Executing[^*]*\*/g,
+  // MCP 工具调用格式
+  /\*\*MCP Tool:[^*]*\*\*[\s\S]*?(?=\n\n|$)/g,
+];
+
+/**
  * 需要完全过滤的标签（内容也过滤）
  */
 const FULL_FILTER_TAGS = [
@@ -85,7 +98,13 @@ export class MonologueFilter {
    * @returns 过滤后的文本（可能为空）
    */
   process(text: string): string {
-    this.buffer += text;
+    // 先过滤工具调用模式（SDK 返回的工具信息）
+    let filteredText = text;
+    for (const pattern of TOOL_PATTERNS) {
+      filteredText = filteredText.replace(pattern, '');
+    }
+
+    this.buffer += filteredText;
     const output: string[] = [];
 
     while (this.buffer.length > 0) {
