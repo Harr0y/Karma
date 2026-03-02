@@ -1,5 +1,29 @@
 // Info Extractor - 从 Agent 输出中提取结构化信息
 
+/**
+ * Extraction mode configuration
+ * - xml: Use XML tags + regex fallback (default, more reliable)
+ * - json: Direct JSON output from AI (simpler, requires AI cooperation)
+ */
+export type ExtractionMode = 'xml' | 'json';
+
+// Default extraction mode (can be overridden by config)
+let currentMode: ExtractionMode = 'xml';
+
+/**
+ * Set the extraction mode
+ */
+export function setExtractionMode(mode: ExtractionMode): void {
+  currentMode = mode;
+}
+
+/**
+ * Get the current extraction mode
+ */
+export function getExtractionMode(): ExtractionMode {
+  return currentMode;
+}
+
 export interface ExtractedClientInfo {
   name?: string;
   gender?: 'male' | 'female';
@@ -229,4 +253,86 @@ export function extractClientInfoFallback(text: string): ExtractedClientInfo | n
   if (Object.keys(info).length === 0) return null;
 
   return info;
+}
+
+/**
+ * JSON Mode: 从 AI 输出的 JSON 格式中提取客户信息
+ *
+ * 期望格式：
+ * ```json
+ * {
+ *   "client_info": {
+ *     "name": "张三",
+ *     "gender": "male",
+ *     "birthDate": "1990-05-15T06:00:00",
+ *     "birthPlace": "北京",
+ *     "currentCity": "上海"
+ *   }
+ * }
+ * ```
+ */
+export function extractClientInfoFromJson(text: string): ExtractedClientInfo | null {
+  // 尝试匹配 JSON 块
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+  if (!jsonMatch) {
+    // 尝试直接解析整个文本作为 JSON
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.client_info) {
+        return {
+          name: parsed.client_info.name,
+          gender: parsed.client_info.gender,
+          birthDate: parsed.client_info.birthDate,
+          birthPlace: parsed.client_info.birthPlace,
+          currentCity: parsed.client_info.currentCity,
+        };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[1].trim());
+    if (parsed.client_info) {
+      return {
+        name: parsed.client_info.name,
+        gender: parsed.client_info.gender,
+        birthDate: parsed.client_info.birthDate,
+        birthPlace: parsed.client_info.birthPlace,
+        currentCity: parsed.client_info.currentCity,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * 统一提取函数 - 根据当前模式选择提取方法
+ *
+ * @param text AI 输出文本
+ * @param mode 可选，覆盖当前模式
+ */
+export function extractClientInfoUnified(
+  text: string,
+  mode?: ExtractionMode
+): ExtractedClientInfo | null {
+  const useMode = mode || currentMode;
+
+  if (useMode === 'json') {
+    // JSON 模式：先尝试 JSON，失败则 fallback
+    const jsonResult = extractClientInfoFromJson(text);
+    if (jsonResult) return jsonResult;
+  }
+
+  // XML 模式或 JSON 失败时：先尝试 XML，失败则 fallback
+  const xmlResult = extractClientInfo(text);
+  if (xmlResult) return xmlResult;
+
+  // 最后尝试 fallback
+  return extractClientInfoFallback(text);
 }

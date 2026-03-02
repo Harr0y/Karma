@@ -1,0 +1,43 @@
+version: '3.8'
+
+# A/B Testing Docker Compose
+# Usage: docker-compose -f docker-compose.ab.yml up
+
+services:
+  # Control (A) - Full configuration with all features
+  control:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        AB_CONFIG: config-a.yaml
+    ports:
+      - "3001:3080"
+    environment:
+      - NODE_ENV=production
+      - AB_MODE=control
+    container_name: karma-control
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Variant (B) - Simplified configuration
+  variant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        AB_CONFIG: config-b.yaml
+    ports:
+      - "3002:3080"
+    environment:
+      - NODE_ENV=production
+      - AB_MODE=variant
+    container_name: karma-variant
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
