@@ -18,13 +18,23 @@ const FILTER_TAGS = [
  * SDK 返回的工具调用信息不应该暴露给用户
  */
 const TOOL_PATTERNS = [
-  // Z.ai Built-in Tool 格式
-  /\*\*🌐 Z\.ai Built-in Tool: \w+\*\*\s*\n\n\*\*Input:\*\*\s*\n```json\n\{[^}]*\}\n```\s*\n\n\*Executing on server\.\.\.\*\*/g,
-  // 通用工具调用格式（Markdown）
-  /\*\*🌐 \w+ Tool: \w+\*\*[\s\S]*?\*Executing[^*]*\*/g,
+  // Z.ai Built-in Tool 格式 - 最常见的格式
+  /\*\*🌐 Z\.ai Built-in Tool:[\s\S]*?\*Executing on server\.\.\.\*\*/g,
+  // 通用工具调用格式（带 🌐 图标）
+  /\*\*🌐[\s\S]*?\*Executing[^\n]*\*/g,
   // MCP 工具调用格式
-  /\*\*MCP Tool:[^*]*\*\*[\s\S]*?(?=\n\n|$)/g,
+  /\*\*MCP Tool:[\s\S]*?\*\*/g,
+  // 代码块中的工具调用
+  /```json\s*\n?\{[^`]*```/g,
 ];
+
+/**
+ * 工具调用开始标记
+ * 用于检测流式输出中的工具调用开始
+ */
+const TOOL_CALL_START = '**🌐';
+const TOOL_CALL_END = '*Executing on server...*';
+const MAX_TOOL_CALL_LENGTH = 5000; // 工具调用最大长度
 
 /**
  * 需要完全过滤的标签（内容也过滤）
@@ -84,6 +94,7 @@ export interface MonologueFilterOptions {
 export class MonologueFilter {
   private buffer = '';
   private insideTag: string | null = null;
+  private insideToolCall = false; // 是否在工具调用块内
   private hasOutput = false;
   private keepInnerMonologue: boolean;
   private tagErrorLogged = false; // 避免重复日志
@@ -93,21 +104,51 @@ export class MonologueFilter {
   }
 
   /**
-   * 处理一段文本，过滤所有内部标签
+   * 处理一段文本，过滤所有内部标签和工具调用
    * @param text 输入文本
    * @returns 过滤后的文本（可能为空）
    */
   process(text: string): string {
-    // 先过滤工具调用模式（SDK 返回的工具信息）
-    let filteredText = text;
-    for (const pattern of TOOL_PATTERNS) {
-      filteredText = filteredText.replace(pattern, '');
-    }
-
-    this.buffer += filteredText;
+    this.buffer += text;
     const output: string[] = [];
 
     while (this.buffer.length > 0) {
+      // 优先处理工具调用过滤
+      if (this.insideToolCall) {
+        // 在工具调用块内，查找结束标记
+        const endIdx = this.buffer.indexOf(TOOL_CALL_END);
+        if (endIdx !== -1) {
+          // 找到结束，跳过整个工具调用块
+          this.buffer = this.buffer.slice(endIdx + TOOL_CALL_END.length);
+          this.insideToolCall = false;
+          continue;
+        } else {
+          // 检查是否超过最大长度
+          if (this.buffer.length > MAX_TOOL_CALL_LENGTH) {
+            getLogger().warn(`工具调用内容超过 ${MAX_TOOL_CALL_LENGTH} 字符，强制退出`, {
+              module: 'agent',
+            });
+            this.insideToolCall = false;
+            continue;
+          }
+          // 还没到结束，继续缓冲
+          break;
+        }
+      }
+
+      // 检测工具调用开始
+      const toolCallStartIdx = this.buffer.indexOf(TOOL_CALL_START);
+      if (toolCallStartIdx !== -1 && !this.insideTag) {
+        // 输出开始标记之前的内容
+        const before = this.buffer.slice(0, toolCallStartIdx);
+        if (before.length > 0) {
+          output.push(before);
+        }
+        this.buffer = this.buffer.slice(toolCallStartIdx);
+        this.insideToolCall = true;
+        continue;
+      }
+
       if (this.insideTag) {
         // 在标签内部，查找结束标签
         const endTag = `</${this.insideTag}>`;
