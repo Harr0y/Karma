@@ -56,6 +56,9 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # Install mcporter (MCP CLI for Exa search)
 RUN npm install -g mcporter
 
+# Install Claude CLI (required by Claude Agent SDK)
+RUN npm install -g @anthropic-ai/claude-code
+
 # Install yt-dlp (video info extraction for YouTube/Bilibili)
 RUN pip3 install --break-system-packages yt-dlp
 
