@@ -51,7 +51,7 @@ const DEFAULT_CONFIG: KarmaConfig = {
     authToken: '',
     baseUrl: 'https://api.anthropic.com',
     model: 'claude-sonnet-4-5-20250929',
-    timeout: 300000,
+    timeout: 600000, // 增加到 10 分钟，避免复杂查询超时
   },
   storage: {
     type: 'sqlite',

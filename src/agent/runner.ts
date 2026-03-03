@@ -124,8 +124,14 @@ export class AgentRunner {
     });
 
     // 创建 AbortController 用于超时控制
-    const timeoutMs = timeout ?? 300000; // 默认 5 分钟
+    const timeoutMs = timeout ?? 600000; // 默认 10 分钟（已从 5 分钟增加）
     const abortController = new AbortController();
+    const startTime = Date.now(); // 在使用前定义
+
+    // 超时进度反馈机制
+    let timeoutWarningSent = false;
+    const warningThreshold = timeoutMs * 0.8; // 80% 时发送警告
+
     const timeoutId = setTimeout(() => {
       abortController.abort();
       this.logger.warn('请求超时，正在中止', {
@@ -134,6 +140,19 @@ export class AgentRunner {
         metadata: { timeoutMs },
       });
     }, timeoutMs);
+
+    // 进度检查定时器（每 30 秒检查一次）
+    const progressCheckInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= warningThreshold && !timeoutWarningSent) {
+        this.logger.warn('请求即将超时', {
+          operation: 'timeout_warning',
+          sessionId: session.id,
+          metadata: { elapsed, timeoutMs, remaining: timeoutMs - elapsed },
+        });
+        timeoutWarningSent = true;
+      }
+    }, 30000);
 
     const queryOptions = {
       model,
@@ -366,8 +385,9 @@ export class AgentRunner {
       });
       throw err;
     } finally {
-      // 确保超时定时器被清除
+      // 确保定时器被清除
       clearTimeout(timeoutId);
+      clearInterval(progressCheckInterval);
     }
   }
 
