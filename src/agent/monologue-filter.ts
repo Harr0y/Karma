@@ -108,6 +108,7 @@ export class MonologueFilter {
   private hasOutput = false;
   private keepInnerMonologue: boolean;
   private tagErrorLogged = false; // 避免重复日志
+  private isFirstOutput = true; // 是否是第一次输出（用于 trim 开头空行）
 
   constructor(options: MonologueFilterOptions = {}) {
     this.keepInnerMonologue = options.keepInnerMonologue ?? false;
@@ -261,7 +262,14 @@ export class MonologueFilter {
       }
     }
 
-    const result = output.join('');
+    let result = output.join('');
+
+    // Issue #74 修复：第一次输出时 trim 掉开头的空白字符
+    if (this.isFirstOutput && result.length > 0) {
+      result = result.trimStart();
+      this.isFirstOutput = false;
+    }
+
     if (result.length > 0) {
       this.hasOutput = true;
     }
@@ -364,6 +372,12 @@ export class MonologueFilter {
         result = this.buffer;
       }
       this.buffer = '';
+    }
+
+    // Issue #74 修复：flush 时也 trim 开头空白（如果之前没有输出过）
+    if (this.isFirstOutput && result.length > 0) {
+      result = result.trimStart();
+      this.isFirstOutput = false;
     }
 
     if (result.length > 0) {
