@@ -56,11 +56,6 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # Install mcporter (MCP CLI for Exa search)
 RUN npm install -g mcporter
 
-# Create mcporter config directory and copy config
-RUN mkdir -p /home/karma/.config/mcporter
-COPY config/mcporter.json /home/karma/.config/mcporter/mcporter.json
-RUN chown -R karma:karma /home/karma/.config
-
 # Install yt-dlp (video info extraction for YouTube/Bilibili)
 RUN pip3 install --break-system-packages yt-dlp
 
@@ -80,8 +75,12 @@ COPY --from=builder /app/skills ./skills
 # Create non-root user for security
 RUN addgroup -g 1001 -S karma && \
     adduser -S -D -H -u 1001 -h /home/karma -s /sbin/nologin -G karma -g karma karma && \
-    mkdir -p /home/karma/.karma/logs /home/karma/.karma/skills && \
+    mkdir -p /home/karma/.karma/logs /home/karma/.karma/skills /home/karma/.config/mcporter && \
     chown -R karma:karma /home/karma
+
+# Copy mcporter config for Exa search
+COPY config/mcporter.json /home/karma/.config/mcporter/mcporter.json
+RUN chown karma:karma /home/karma/.config/mcporter/mcporter.json
 
 # Create data directory for SQLite and set permissions
 RUN mkdir -p /data && \
