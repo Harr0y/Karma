@@ -1,4 +1,9 @@
-// Web Search Tool - 搜索历史事件和相关信息
+// Web Search Tool - 使用 Exa AI 进行语义搜索
+
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * WebSearch 结果项
@@ -18,52 +23,66 @@ export interface WebSearchResult {
 }
 
 /**
- * 使用 DuckDuckGo Instant Answer API 进行搜索
- * 这是一个免费的搜索 API，不需要 API key
+ * Exa AI 搜索响应格式
+ */
+interface ExaSearchResponse {
+  results: Array<{
+    title: string;
+    url: string;
+    text?: string;
+    snippet?: string;
+  }>;
+}
+
+/**
+ * 使用 Exa AI 进行语义搜索
+ * 通过 mcporter MCP 调用
  */
 export async function webSearch(query: string): Promise<WebSearchResult> {
-  const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-
   try {
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Karma-Agent/1.0',
-      },
-    });
+    // 使用 mcporter 调用 exa.web_search_exa
+    const { stdout } = await execAsync(
+      `mcporter call exa.web_search_exa query="${query.replace(/"/g, '\\"')}" numResults=5`,
+      {
+        timeout: 30000,
+        maxBuffer: 1024 * 1024, // 1MB buffer
+      }
+    );
 
-    if (!response.ok) {
-      throw new Error(`Search API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // 从 DuckDuckGo 响应中提取结果
+    // 解析 mcporter 输出
     const results: SearchResult[] = [];
 
-    // 添加摘要（如果有）
-    if (data.Abstract) {
-      results.push({
-        title: data.Heading || '摘要',
-        snippet: data.Abstract,
-        url: data.AbstractURL || '',
-      });
-    }
+    // mcporter 返回的是 JSON 格式
+    try {
+      const response = JSON.parse(stdout) as ExaSearchResponse;
 
-    // 添加相关主题
-    if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
-      for (const topic of data.RelatedTopics.slice(0, 5)) {
-        if (topic.Text && topic.FirstURL) {
+      if (response.results && Array.isArray(response.results)) {
+        for (const item of response.results) {
           results.push({
-            title: topic.Text.split(' - ')[0] || '相关主题',
-            snippet: topic.Text,
-            url: topic.FirstURL,
+            title: item.title || '无标题',
+            snippet: item.text || item.snippet || '',
+            url: item.url || '',
           });
+        }
+      }
+    } catch {
+      // 如果 JSON 解析失败，尝试从文本中提取
+      const lines = stdout.split('\n').filter(line => line.trim());
+      for (const line of lines) {
+        if (line.includes('http')) {
+          const urlMatch = line.match(/https?:\/\/[^\s]+/);
+          if (urlMatch) {
+            results.push({
+              title: line.substring(0, 100),
+              snippet: line,
+              url: urlMatch[0],
+            });
+          }
         }
       }
     }
 
-    // 如果没有结果，返回一个提示
+    // 如果没有结果，返回提示
     if (results.length === 0) {
       results.push({
         title: '未找到结果',
