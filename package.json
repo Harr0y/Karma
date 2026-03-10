@@ -19,6 +19,9 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.42",
     "@larksuiteoapi/node-sdk": "^1.59.0",
+    "@mariozechner/pi-agent-core": "0.57.1",
+    "@mariozechner/pi-ai": "0.57.1",
+    "@sinclair/typebox": "0.34.48",
     "better-sqlite3": "^11.7.0",
     "drizzle-orm": "^0.39.3",
     "glob": "^13.0.3",

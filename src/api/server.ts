@@ -8,7 +8,8 @@ import { homedir } from 'os';
 import { StorageService } from '../storage/index.js';
 import { loadSkills } from '../skills/index.js';
 import { SessionManager } from '../session/index.js';
-import { AgentRunner } from '../agent/index.js';
+import { PiAgentRunner } from '../agent/index.js';
+import { createBaziTool } from '../tools/pi-tools.js';
 import { PersonaService } from '../persona/index.js';
 import { getConfig } from '../config/index.js';
 import { getLogger, setLogger, createLogger, type Logger } from '../logger/index.js';
@@ -40,7 +41,7 @@ export class KarmaServer {
   private config: ReturnType<typeof getConfig>;
   private storage: StorageService;
   private sessionManager: SessionManager;
-  private runner: AgentRunner;
+  private runner: PiAgentRunner;
   private personaService: PersonaService;
   private logger: Logger;
   private server?: http.Server;
@@ -110,15 +111,15 @@ export class KarmaServer {
       metadata: { count: skills.length, names: skills.map((s) => s.name) },
     });
 
-    this.runner = new AgentRunner({
+    this.runner = new PiAgentRunner({
       storage: this.storage,
       sessionManager: this.sessionManager,
       skills,
-      personaService: this.personaService,
       model: this.config.ai.model,
       baseUrl: this.config.ai.baseUrl,
       authToken: this.config.ai.authToken,
       timeout: this.config.ai.timeout,
+      tools: [createBaziTool()],
     });
 
     // 初始化 Telegram 适配器（如果配置了）
