@@ -7,8 +7,8 @@ import { dirname, join } from 'path';
 import { StorageService } from './storage/index.js';
 import { loadSkills } from './skills/index.js';
 import { SessionManager } from './session/index.js';
-import { AgentRunner } from './agent/index.js';
-import { PersonaService } from './persona/index.js';
+import { PiAgentRunner } from './agent/index.js';
+import { createBaziTool } from './tools/pi-tools.js';
 import { getConfig } from './config/index.js';
 import { getLogger, setLogger, createLogger } from './logger/index.js';
 import { startServer } from './api/index.js';
@@ -143,24 +143,17 @@ async function main() {
   console.log(`已加载 ${skills.length} 个 Skills:`, skills.map(s => s.name).join(', '));
   console.log();
 
-  // 3. 初始化 PersonaService
-  mainLogger.debug('初始化 PersonaService', { operation: 'persona_init' });
-  const personaService = new PersonaService({
-    soulPath: join(process.cwd(), 'SOUL.md'),
-    storage,
-  });
-
-  // 4. 创建 Runner
-  mainLogger.debug('创建 AgentRunner', { operation: 'runner_init' });
-  const runner = new AgentRunner({
+  // 4. 创建 PiAgentRunner
+  mainLogger.info('初始化 PiAgentRunner', { operation: 'runner_init' });
+  const runner = new PiAgentRunner({
     storage,
     sessionManager,
     skills,
-    personaService,
     model: config.ai.model,
     baseUrl: config.ai.baseUrl,
     authToken: config.ai.authToken,
     timeout: config.ai.timeout,
+    tools: [createBaziTool()],
   });
 
   // 5. 获取/创建会话
